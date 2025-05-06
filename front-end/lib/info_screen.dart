@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'input_form_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class InfoScreen extends StatelessWidget {
   const InfoScreen({super.key, this.language = 'en'});
@@ -130,73 +133,109 @@ class InfoScreen extends StatelessWidget {
     final selectedList = infoList[language]!;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F8FF),
-      appBar: AppBar(
-        title: Text(
-          language == 'vi'
-              ? 'Thông tin chỉ số & đánh giá'
-              : 'Metric Details & Risk Assessment',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
+    backgroundColor: const Color(0xFFF0F8FF),
+    appBar: AppBar(
+      title: Text(
+        language == 'vi'
+            ? 'Thông tin chỉ số & đánh giá'
+            : 'Metric Details & Risk Assessment',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
+        ),
+      ),
+      backgroundColor: Colors.blue[800],
+      elevation: 0,
+    ),
+    body: Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: selectedList.length,
+            itemBuilder: (context, index) {
+              final item = selectedList[index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.1),
+                      spreadRadius: 2,
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.health_and_safety_outlined,
+                      color: Colors.blue[800],
+                      size: 30,
+                    ),
+                  ),
+                  title: Text(
+                    item['label']!,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[800],
+                      fontSize: 18,
+                    ),
+                  ),
+                  subtitle: Text(
+                    item['desc']!,
+                    style: const TextStyle(height: 1.5, fontSize: 15),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-        backgroundColor: Colors.blue[800],
-        elevation: 0,
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: selectedList.length,
-        itemBuilder: (context, index) {
-          final item = selectedList[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.1),
-                  spreadRadius: 2,
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
-              ),
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.health_and_safety_outlined,
-                  color: Colors.blue[800],
-                  size: 30,
-                ),
-              ),
-              title: Text(
-                item['label']!,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
-                  fontSize: 18,
-                ),
-              ),
-              subtitle: Text(
-                item['desc']!,
-                style: const TextStyle(height: 1.5, fontSize: 15),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const InputFormScreen()),
+              );
+
+              if (result != null) {
+                print('Dữ liệu đã nhập: $result');
+                final prefs = await SharedPreferences.getInstance();
+                result.forEach((key, value) {
+                  prefs.setString(key, value);
+                });
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[800],
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-          );
-        },
-      ),
-    );
+            child: Text(
+              language == 'vi' ? "Nhập thông tin" : "Enter Information",
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
   }
 }
