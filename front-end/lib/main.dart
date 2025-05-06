@@ -12,8 +12,8 @@ void main() async {
   runApp(const MyApp());
 }
 
-Future<void> predictHeartDisease(Map<String, dynamic> inputData) async {
-  final url = Uri.parse("http://192.168.1.103:5000/predict");
+Future<Map<String, dynamic>?> predictHeartDisease(Map<String, dynamic> inputData) async {
+  final url = Uri.parse("http://192.168.1.6:5000/predict");
 
   try {
     final response = await http.post(
@@ -24,16 +24,18 @@ Future<void> predictHeartDisease(Map<String, dynamic> inputData) async {
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
-      print("✅ Prediction: ${result['prediction']}");
-      print("📊 Probability: ${result['probability']}");
+      return result;  // TRẢ VỀ KẾT QUẢ
     } else {
-      print("❌ Server error: ${response.statusCode}");
+      print("Server error: ${response.statusCode}");
       print("Message: ${response.body}");
+      return null;
     }
   } catch (e) {
-    print("❌ Exception: $e");
+    print("Exception: $e");
+    return null;
   }
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

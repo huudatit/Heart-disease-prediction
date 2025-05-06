@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'info_screen.dart';
+import 'package:dacn_app/info_screen.dart';
 import 'result_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
+import 'input_form_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     userData = widget.userData;
+    _loadMetricsFromPrefs();
   }
 
   void _logout() async {
@@ -69,6 +72,43 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
+  void _loadMetricsFromPrefs() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  setState(() {
+    metrics['en'] = {
+      "Age": "${prefs.getString('age') ?? '56'} years",
+      "Sex": prefs.getString('sex') == '1' ? "Male" : "Female",
+      "Chest Pain": prefs.getString('cp') ?? "No",
+      "Resting BP": "${prefs.getString('trestbps') ?? '130'} mmHg",
+      "Cholesterol": "${prefs.getString('chol') ?? '250'} mg/dL",
+      "Fasting Blood Sugar": "${prefs.getString('fbs') ?? '105'} mg/dL",
+      "Rest ECG": prefs.getString('restecg') ?? "Normal",
+      "Max Heart Rate": "${prefs.getString('thalach') ?? '150'} bpm",
+      "Exercise Angina": prefs.getString('exang') ?? "No",
+      "Oldpeak": prefs.getString('oldpeak') ?? "2.3",
+      "ST Slope": prefs.getString('slope') ?? "1",
+      "Major Vessels": prefs.getString('ca') ?? "0",
+      "Thalassemia": prefs.getString('thal') ?? "Normal",
+    };
+
+    metrics['vi'] = {
+      "Tuổi": "${prefs.getString('age') ?? '56'} tuổi",
+      "Giới tính": prefs.getString('sex') == '1' ? "Nam" : "Nữ",
+      "Đau ngực": prefs.getString('cp') ?? "Không",
+      "Huyết áp nghỉ": "${prefs.getString('trestbps') ?? '130'} mmHg",
+      "Cholesterol": "${prefs.getString('chol') ?? '250'} mg/dL",
+      "Đường huyết đói": "${prefs.getString('fbs') ?? '105'} mg/dL",
+      "Điện tâm đồ": prefs.getString('restecg') ?? "Bình thường",
+      "Nhịp tim tối đa": "${prefs.getString('thalach') ?? '150'} bpm",
+      "Đau khi vận động": prefs.getString('exang') ?? "Không",
+      "ST giảm": prefs.getString('oldpeak') ?? "2.3",
+      "Dốc ST": prefs.getString('slope') ?? "1",
+      "Số mạch chính": prefs.getString('ca') ?? "0",
+      "Thalassemia": prefs.getString('thal') ?? "Bình thường",
+    };
+  });
+}
 
   void _showEditUserDialog() {
     final nameController = TextEditingController(text: userData['name']);
@@ -393,13 +433,36 @@ class _HomeScreenState extends State<HomeScreen> {
                               ? "Tìm hiểu chỉ số"
                               : "Learn Metrics",
                       color: Colors.blue,
-                      onTap:
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => InfoScreen(language: _language),
-                            ),
-                          ),
+                      onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const InputFormScreen()),
+                      );
+
+                      if (result != null) {
+                        setState(() {
+                          metrics['en'] = {
+                            "Age": "${result['age']} years",
+                            "Sex": result['sex'] == '1' ? "Male" : "Female",
+                            "Chest Pain": result['cp'] == '1' ? "Yes" : "No",
+                            "Resting BP": "${result['trestbps']} mmHg",
+                            "Cholesterol": "${result['chol']} mg/dL",
+                            "Fasting Blood Sugar": "${result['fbs']} mg/dL",
+                            "Rest ECG": "${result['restecg']}",
+                            "Max Heart Rate": "${result['thalach']} bpm",
+                            "Exercise Angina": result['exang'] == '1' ? "Yes" : "No",
+                            "Oldpeak": "${result['oldpeak']}",
+                            "ST Slope": "${result['slope']}",
+                            "Major Vessels": "${result['ca']}",
+                            "Thalassemia": "${result['thal']}",
+                          };
+                        });
+
+                        // Gọi API backend
+                        predictHeartDisease(result);
+                      }
+                    },
+
                     ),
                   ),
                   const SizedBox(width: 16),
