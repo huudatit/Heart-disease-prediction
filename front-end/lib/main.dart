@@ -12,19 +12,28 @@ void main() async {
   runApp(const MyApp());
 }
 
-Future<Map<String, dynamic>?> predictHeartDisease(Map<String, dynamic> inputData) async {
-  final url = Uri.parse("http://192.168.1.6:5000/predict");
+Future<Map<String, dynamic>?> predictHeartDisease(
+  Map<String, dynamic> inputData,
+) async {
+  // Sử dụng địa chỉ IP của máy bạn khi chạy backend
+  final url = Uri.parse("http://192.168.1.103:5000/predict");
 
   try {
+    // In ra dữ liệu đầu vào để kiểm tra
+    print('Input Data: $inputData');
+
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(inputData),
     );
 
+    print('Response Status Code: ${response.statusCode}');
+    print('Response Body: ${response.body}');
+
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body);
-      return result;  // TRẢ VỀ KẾT QUẢ
+      return result; // TRẢ VỀ KẾT QUẢ
     } else {
       print("Server error: ${response.statusCode}");
       print("Message: ${response.body}");
