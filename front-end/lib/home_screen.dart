@@ -212,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             .then((snapshot) {
                               if (snapshot.docs.isNotEmpty) {
                                 snapshot.docs.first.reference.update({
-                                  'name': nameController.text, // Thêm dòng này
+                                  'name': nameController.text, 
                                   'email': emailController.text,
                                   'phone': phoneController.text,
                                   'age':
@@ -222,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                 setState(() {
                                   userData['name'] =
-                                      nameController.text; // Thêm dòng này
+                                      nameController.text; 
                                   userData['email'] = emailController.text;
                                   userData['phone'] = phoneController.text;
                                   userData['age'] =
@@ -315,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void predictHeartDisease(Map<String, dynamic> input) async {
     final url = Uri.parse(
-      'http://192.168.1.103:5000/predict',
+      'http://192.168.1.107:5000/predict',
     ); // Cập nhật địa chỉ backend
 
     try {
@@ -475,8 +475,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.info_outline,
                       title:
                           _language == 'vi'
-                              ? "Tìm hiểu chỉ số"
-                              : "Learn Metrics",
+                              ? "Nhập thông tin sức khỏe"
+                              : "Health Input",
                       color: Colors.blue,
                       onTap: () async {
                         final result = await Navigator.push(
