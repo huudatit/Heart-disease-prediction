@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dacn_app/main.dart';
 import 'package:dacn_app/result_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class InputFormScreen extends StatefulWidget {
   const InputFormScreen({Key? key}) : super(key: key);
@@ -88,6 +89,12 @@ class _InputFormScreenState extends State<InputFormScreen>
     });
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      for (var entry in inputData.entries) {
+        prefs.setString(entry.key, entry.value.toString());
+      }
+      prefs.setString('last_updated', DateTime.now().toIso8601String());
+
       final result = await predictHeartDisease(inputData);
 
       setState(() {
@@ -284,7 +291,6 @@ class _InputFormScreenState extends State<InputFormScreen>
       ),
       body: Column(
         children: [
-          // Header info
           Container(
             width: double.infinity,
             color: Colors.blue[600],
@@ -310,7 +316,6 @@ class _InputFormScreenState extends State<InputFormScreen>
               ),
             ),
           ),
-          // Form
           Expanded(
             child: FadeTransition(
               opacity: _animationController,
@@ -324,7 +329,7 @@ class _InputFormScreenState extends State<InputFormScreen>
                         .entries
                         .map((entry) => _buildInputCard(entry.value, entry.key))
                         .toList(),
-                    const SizedBox(height: 80), // Space for FAB
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),

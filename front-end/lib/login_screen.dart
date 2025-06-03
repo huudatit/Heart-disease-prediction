@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sign_up.dart';
 import 'home_screen.dart';
+import 'admin_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,8 +13,67 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _phoneController = TextEditingController();
+  final _phoneEmailController = TextEditingController();
   bool _isLoading = false;
+  bool _useEmailLogin = false;
+  bool _isCheckingAutoLogin = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoLogin();
+  }
+
+  // Kiểm tra auto login khi mở app
+  Future<void> _checkAutoLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPhone = prefs.getString('phone');
+      final savedEmail = prefs.getString('email');
+      final savedRole = prefs.getString('userRole');
+
+      if ((savedPhone != null || savedEmail != null) && savedRole != null) {
+        // Có thông tin đăng nhập đã lưu, kiểm tra trong Firebase
+        final query = FirebaseFirestore.instance.collection('users');
+        final userSnapshot =
+            await query
+                .where(
+                  savedPhone != null ? 'phone' : 'email',
+                  isEqualTo: savedPhone ?? savedEmail,
+                )
+                .get();
+
+        if (userSnapshot.docs.isNotEmpty) {
+          final userData = userSnapshot.docs.first.data();
+          final role = userData['role'] ?? 'user';
+
+          // Điều hướng dựa trên role
+          if (mounted) {
+            if (role == 'admin') {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const AdminDashboard()),
+              );
+            } else {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => HomeScreen(userData: userData),
+                ),
+              );
+            }
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking auto login: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _isCheckingAutoLogin = false;
+      });
+    }
+  }
 
   void _navigateToSignUp() {
     Navigator.of(context).push(
@@ -38,9 +98,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleLogin() async {
-    if (_phoneController.text.trim().isEmpty) {
+    final input = _phoneEmailController.text.trim();
+    if (input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập số điện thoại')),
+        SnackBar(
+          content: Text(
+            'Vui lòng nhập ${_useEmailLogin ? 'email' : 'số điện thoại'}',
+          ),
+          backgroundColor: Colors.red[600],
+        ),
       );
       return;
     }
@@ -50,38 +116,55 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final phone = _phoneController.text.trim();
-
-      // Tìm user theo số điện thoại
+      final query = FirebaseFirestore.instance.collection('users');
       final userSnapshot =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .where('phone', isEqualTo: phone)
+          await query
+              .where(_useEmailLogin ? 'email' : 'phone', isEqualTo: input)
               .get();
 
       if (userSnapshot.docs.isNotEmpty) {
         final userData = userSnapshot.docs.first.data();
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('phone', phone);
+        await prefs.setString(_useEmailLogin ? 'email' : 'phone', input);
 
-        // Chuyển đến màn hình chính với thông tin người dùng
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => HomeScreen(userData: userData)),
-        );
+        final role = userData['role'] ?? 'user';
+        // Lưu role để kiểm tra khi reload app
+        await prefs.setString('userRole', role);
+
+        if (role == 'admin') {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          );
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => HomeScreen(userData: userData)),
+          );
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Xin chào ${userData['name']}!')),
+          SnackBar(
+            content: Text('Xin chào ${userData['name']}!'),
+            backgroundColor: Colors.green[600],
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Số điện thoại chưa được đăng ký')),
+          SnackBar(
+            content: Text(
+              '${_useEmailLogin ? 'Email' : 'Số điện thoại'} chưa được đăng ký',
+            ),
+            backgroundColor: Colors.red[600],
+          ),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi đăng nhập: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi đăng nhập: $e'),
+          backgroundColor: Colors.red[600],
+        ),
+      );
     } finally {
       setState(() {
         _isLoading = false;
@@ -91,6 +174,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Hiển thị loading khi đang kiểm tra auto login
+    if (_isCheckingAutoLogin) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF0F8FF),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Hero(
+                tag: 'logo',
+                child: Image.asset(
+                  'assets/logo/logo.png',
+                  width: 120,
+                  height: 120,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Hệ Thống Y Tế',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.blue[800],
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 30),
+              CircularProgressIndicator(color: Colors.blue[800]),
+              const SizedBox(height: 20),
+              Text(
+                'Đang kiểm tra thông tin đăng nhập...',
+                style: TextStyle(color: Colors.blue[600], fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F8FF),
       body: SafeArea(
@@ -115,7 +237,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Logo và Tiêu đề
                   Hero(
                     tag: 'logo',
                     child: Image.asset(
@@ -135,13 +256,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
-
-                  // Trường nhập số điện thoại
                   TextField(
-                    controller: _phoneController,
+                    controller: _phoneEmailController,
                     decoration: InputDecoration(
-                      hintText: 'Số điện thoại',
-                      prefixIcon: Icon(Icons.phone, color: Colors.blue[800]),
+                      hintText: _useEmailLogin ? 'Email' : 'Số điện thoại',
+                      prefixIcon: Icon(
+                        _useEmailLogin ? Icons.email : Icons.phone,
+                        color: Colors.blue[800],
+                      ),
                       fillColor: Colors.blue[50],
                       filled: true,
                       border: OutlineInputBorder(
@@ -156,12 +278,29 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    keyboardType: TextInputType.phone,
+                    keyboardType:
+                        _useEmailLogin
+                            ? TextInputType.emailAddress
+                            : TextInputType.phone,
                   ),
-
-                  const SizedBox(height: 25),
-
-                  // Nút Đăng Nhập
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _useEmailLogin = !_useEmailLogin;
+                      });
+                    },
+                    child: Text(
+                      _useEmailLogin
+                          ? 'Đăng nhập bằng số điện thoại'
+                          : 'Đăng nhập bằng email',
+                      style: TextStyle(
+                        color: Colors.blue[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
                   _isLoading
                       ? CircularProgressIndicator(color: Colors.blue[800])
                       : ElevatedButton(
@@ -184,10 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-
                   const SizedBox(height: 20),
-
-                  // Liên kết Đăng Ký
                   TextButton(
                     onPressed: _navigateToSignUp,
                     child: Text(
@@ -199,8 +335,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-
-                  // Nút Dùng Thử
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
@@ -213,6 +347,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'email': 'test@example.com',
                                   'phone': '0123456789',
                                   'age': 25,
+                                  'gender': 'Male',
+                                  'role': 'user',
                                 },
                               ),
                         ),
@@ -238,7 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _phoneEmailController.dispose();
     super.dispose();
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart'; // Thêm package uuid
+import 'package:uuid/uuid.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -13,16 +13,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _ageController = TextEditingController();
+  final _birthYearController = TextEditingController();
 
   bool _isLoading = false;
-  final _uuid = Uuid(); // Khởi tạo đối tượng UUID
+  final _uuid = Uuid();
+  String? _selectedGender;
 
   void _handleSignUp() async {
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
         _phoneController.text.isEmpty ||
-        _ageController.text.isEmpty) {
+        _birthYearController.text.isEmpty ||
+        _selectedGender == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin')),
       );
@@ -37,7 +39,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final phone = _phoneController.text.trim();
       final name = _nameController.text.trim();
 
-      // Kiểm tra nếu số điện thoại đã tồn tại
       final phoneQuery =
           await FirebaseFirestore.instance
               .collection('users')
@@ -49,24 +50,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
           const SnackBar(content: Text('Số điện thoại đã được đăng ký')),
         );
       } else {
-        // Tạo UUID mới cho người dùng
         final userId = _uuid.v4();
 
-        // Lưu thông tin người dùng vào Firestore, sử dụng UUID làm doc ID
         await FirebaseFirestore.instance.collection('users').doc(userId).set({
-          'userId': userId, // Lưu ID để tham chiếu dễ dàng
+          'userId': userId,
           'name': name,
           'email': _emailController.text.trim(),
-          'age': int.parse(_ageController.text.trim()),
+          'birthYear': int.parse(_birthYearController.text.trim()),
           'createdAt': FieldValue.serverTimestamp(),
           'phone': phone,
+          'gender': _selectedGender,
+          'role': 'user',
         });
 
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
 
-        Navigator.of(context).pop(); // Quay lại màn hình đăng nhập
+        Navigator.of(context).pop();
       }
     } catch (e) {
       print('Sign up error: $e');
@@ -85,7 +86,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _ageController.dispose();
+    _birthYearController.dispose();
     super.dispose();
   }
 
@@ -108,7 +109,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Name TextField
           _buildTextField(
             controller: _nameController,
             label: 'Họ và tên',
@@ -116,8 +116,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             keyboardType: TextInputType.name,
           ),
           const SizedBox(height: 16),
-
-          // Email TextField
           _buildTextField(
             controller: _emailController,
             label: 'Email',
@@ -125,8 +123,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: 16),
-
-          // Phone TextField
           _buildTextField(
             controller: _phoneController,
             label: 'Số điện thoại',
@@ -134,17 +130,46 @@ class _SignUpScreenState extends State<SignUpScreen> {
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: 16),
-
-          // Age TextField
           _buildTextField(
-            controller: _ageController,
-            label: 'Tuổi',
-            icon: Icons.cake_outlined,
+            controller: _birthYearController,
+            label: 'Năm sinh',
+            icon: Icons.calendar_today_outlined,
             keyboardType: TextInputType.number,
           ),
+          const SizedBox(height: 16),
+          Text(
+            'Giới tính:',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: RadioListTile<String>(
+                  title: const Text('Nam'),
+                  value: 'Nam',
+                  groupValue: _selectedGender,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedGender = value;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: RadioListTile<String>(
+                  title: const Text('Nữ'),
+                  value: 'Nữ',
+                  groupValue: _selectedGender,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedGender = value;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
-
-          // Sign Up Button
           _isLoading
               ? const Center(
                 child: CircularProgressIndicator(color: Colors.blue),
@@ -174,7 +199,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  // Helper method to build text fields with consistent styling
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

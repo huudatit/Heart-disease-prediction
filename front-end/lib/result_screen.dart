@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:dacn_app/input_form_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class ResultScreen extends StatelessWidget {
+class ResultScreen extends StatefulWidget {
   final int prediction;
   final double probability;
   final Map<String, dynamic> inputData;
@@ -12,6 +14,90 @@ class ResultScreen extends StatelessWidget {
     required this.probability,
     required this.inputData,
   });
+
+  @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
+
+class _ResultScreenState extends State<ResultScreen> {
+  bool _isSaving = false;
+  bool _isSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tự động lưu kết quả khi màn hình được tạo
+    _saveHealthRecord();
+  }
+
+  Future<void> _saveHealthRecord() async {
+    if (_isSaved) return; // Tránh lưu trùng lặp
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      // Lấy thông tin user hiện tại
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('Người dùng chưa đăng nhập');
+      }
+
+      // Chuẩn bị dữ liệu để lưu
+      final healthData = {
+        'timestamp': FieldValue.serverTimestamp(),
+        'prediction': widget.prediction,
+        'probability': widget.probability,
+        'risk_level': widget.prediction == 1 ? 'high' : 'low',
+        'risk_description':
+            widget.prediction == 1
+                ? 'Nguy cơ mắc bệnh tim cao'
+                : 'Nguy cơ mắc bệnh tim thấp',
+        'input_data': widget.inputData,
+        'created_at': DateTime.now().toIso8601String(),
+        'user_id': user.uid,
+      };
+
+      // Lưu vào Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('health_records')
+          .add(healthData);
+
+      setState(() {
+        _isSaved = true;
+        _isSaving = false;
+      });
+
+      // Hiển thị thông báo thành công
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã lưu kết quả thành công!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSaving = false;
+      });
+
+      // Hiển thị thông báo lỗi
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi lưu kết quả: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +114,26 @@ class ResultScreen extends StatelessWidget {
         ),
         backgroundColor: Colors.blue[800],
         elevation: 0,
+        actions: [
+          // Hiển thị trạng thái lưu
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            )
+          else if (_isSaved)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Icon(Icons.cloud_done, color: Colors.white),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -56,11 +162,11 @@ class ResultScreen extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          prediction == 1
+                          widget.prediction == 1
                               ? Icons.warning_rounded
                               : Icons.check_circle_outline,
                           color:
-                              prediction == 1
+                              widget.prediction == 1
                                   ? Colors.red[700]
                                   : Colors.green[700],
                           size: 40,
@@ -68,14 +174,14 @@ class ResultScreen extends StatelessWidget {
                         const SizedBox(width: 15),
                         Expanded(
                           child: Text(
-                            prediction == 1
+                            widget.prediction == 1
                                 ? "Nguy cơ mắc bệnh tim cao"
                                 : "Nguy cơ mắc bệnh tim thấp",
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                               color:
-                                  prediction == 1
+                                  widget.prediction == 1
                                       ? Colors.red[700]
                                       : Colors.green[700],
                             ),
@@ -87,8 +193,32 @@ class ResultScreen extends StatelessWidget {
 
                     // Xác suất
                     Text(
-                      "Xác suất: ${(probability * 100).toStringAsFixed(2)}%",
+                      "Xác suất: ${(widget.probability * 100).toStringAsFixed(2)}%",
                       style: TextStyle(fontSize: 16, color: Colors.blue[800]),
+                    ),
+
+                    // Trạng thái lưu
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          _isSaved ? Icons.cloud_done : Icons.cloud_queue,
+                          size: 16,
+                          color: _isSaved ? Colors.green : Colors.grey,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _isSaving
+                              ? "Đang lưu..."
+                              : _isSaved
+                              ? "Đã lưu vào hồ sơ"
+                              : "Chưa lưu",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _isSaved ? Colors.green : Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -123,7 +253,7 @@ class ResultScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 15),
-                    ...inputData.entries.map((entry) {
+                    ...widget.inputData.entries.map((entry) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Row(
@@ -137,7 +267,7 @@ class ResultScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              entry.value.toString(),
+                              _transformValue(entry.key, entry.value),
                               style: const TextStyle(fontSize: 16),
                             ),
                           ],
@@ -151,7 +281,7 @@ class ResultScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               // Phần giải pháp
-              prediction == 1
+              widget.prediction == 1
                   ? Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -215,36 +345,80 @@ class ResultScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // Nút quay lại
-              Center(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const InputFormScreen(),
+              // Các nút hành động
+              Row(
+                children: [
+                  // Nút lưu lại (nếu chưa lưu hoặc lưu thất bại)
+                  if (!_isSaved)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isSaving ? null : _saveHealthRecord,
+                        icon:
+                            _isSaving
+                                ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Icon(Icons.save, color: Colors.white),
+                        label: Text(
+                          _isSaving ? 'Đang lưu...' : 'Lưu kết quả',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[800],
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 15,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+
+                  if (!_isSaved) const SizedBox(width: 10),
+
+                  // Nút quay lại
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const InputFormScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[800],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 15,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      child: const Text(
+                        'Dự đoán lại',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Dự đoán lại',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                ],
               ),
             ],
           ),
