@@ -10,11 +10,11 @@ print("Script directory:", os.path.dirname(os.path.abspath(__file__)))
 
 # Thử nhiều đường dẫn khác nhau
 possible_paths = [
-    os.path.join(os.path.dirname(__file__), 'lgbm_model.pkl'),
-    os.path.join(os.path.dirname(__file__), 'ml_model', 'lgbm_model.pkl'),
-    os.path.join(os.getcwd(), 'lgbm_model.pkl'),
-    os.path.join(os.getcwd(), 'ml_model', 'lgbm_model.pkl'),
-    os.path.join(os.path.dirname(sys.executable), 'lgbm_model.pkl')
+    os.path.join(os.path.dirname(__file__), 'random_forest_model.pkl'),
+    os.path.join(os.path.dirname(__file__), 'ml_model', 'random_forest_model.pkl'),
+    os.path.join(os.getcwd(), 'random_forest_model.pkl'),
+    os.path.join(os.getcwd(), 'ml_model', 'random_forest_model.pkl'),
+    os.path.join(os.path.dirname(sys.executable), 'random_forest_model.pkl')
 ]
 
 # Thử load model từ các đường dẫn khác nhau

@@ -315,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void predictHeartDisease(Map<String, dynamic> input) async {
     final url = Uri.parse(
-      'http://192.168.1.107:5000/predict',
+      'http://192.168.1.36:5000/predict',
     ); // Cập nhật địa chỉ backend
 
     try {
