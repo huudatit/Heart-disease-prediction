@@ -1,9 +1,10 @@
-import 'package:dacn_app/firebase_options.dart';
+import 'package:dacn_app/firebase/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'splash_screen.dart';
+import 'common/splash_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api/api_config.dart';
 
 void main() async {
   // Đảm bảo Firebase được khởi tạo trước khi chạy app
@@ -19,7 +20,8 @@ Future<Map<String, dynamic>?> predictHeartDisease(
   Map<String, dynamic> inputData,
 ) async {
   // Sử dụng địa chỉ IP của máy bạn khi chạy backend
-  final url = Uri.parse("http://192.168.1.111:5000/predict");
+
+  final url = Uri.parse(ApiConfig.baseUrl);
 
   try {
     // In ra dữ liệu đầu vào để kiểm tra

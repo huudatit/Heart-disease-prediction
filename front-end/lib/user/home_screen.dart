@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dacn_app/info_screen.dart';
+import 'package:dacn_app/user/info_screen.dart';
 import 'result_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login_screen.dart';
+import '../common/login_screen.dart';
 import 'input_form_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import '../api/api_config.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -679,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Hàm gọi prediction qua API Flask
   void predictHeartDisease(Map<String, dynamic> input) async {
-    final url = Uri.parse('http://192.168.1.111:5000/predict');
+    final url = Uri.parse(ApiConfig.predictEndpoint());
 
     try {
       final response = await http.post(

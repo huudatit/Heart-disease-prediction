@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dacn_app/main.dart';
-import 'package:dacn_app/result_screen.dart';
+import 'package:dacn_app/user/result_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class InputFormScreen extends StatefulWidget {

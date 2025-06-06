@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dacn_app/input_form_screen.dart';
-import 'login_screen.dart';
+import 'package:dacn_app/user/input_form_screen.dart';
+import '../common/login_screen.dart';
 
 class ResultScreen extends StatefulWidget {
   final int prediction;
