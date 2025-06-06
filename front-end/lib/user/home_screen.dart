@@ -680,13 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Hàm gọi prediction qua API Flask
   void predictHeartDisease(Map<String, dynamic> input) async {
-<<<<<<< HEAD:front-end/lib/user/home_screen.dart
     final url = Uri.parse(ApiConfig.predictEndpoint());
-=======
-    final url = Uri.parse('http://192.168.1.111:5000/predict');
-
-
->>>>>>> 7b29ff030e555052aab5a19bdb368bf6da533c54:front-end/lib/home_screen.dart
 
     try {
       final response = await http.post(
