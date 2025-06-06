@@ -20,8 +20,13 @@ Future<Map<String, dynamic>?> predictHeartDisease(
   Map<String, dynamic> inputData,
 ) async {
   // Sử dụng địa chỉ IP của máy bạn khi chạy backend
+<<<<<<< HEAD
 
   final url = Uri.parse(ApiConfig.baseUrl);
+=======
+  final url = Uri.parse("http://192.168.1.111:5000/predict");
+
+>>>>>>> 7b29ff030e555052aab5a19bdb368bf6da533c54
 
   try {
     // In ra dữ liệu đầu vào để kiểm tra
