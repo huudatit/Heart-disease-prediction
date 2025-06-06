@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 class UserDetailScreen extends StatefulWidget {
   final String userId;
   final Map<String, dynamic> userData;
+  final String language; // 'vi' hoặc 'en'
 
   const UserDetailScreen({
     Key? key,
     required this.userId,
     required this.userData,
+    required this.language,
   }) : super(key: key);
 
   @override
@@ -38,7 +40,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
               .collection('users')
               .doc(widget.userId)
               .collection('health_records')
-              .orderBy('created_at', descending: true)
+              .where('timestamp', isNotEqualTo: null)
+              .orderBy('timestamp', descending: true)
               .get();
 
       List<Map<String, dynamic>> records = [];
@@ -67,21 +70,29 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     } catch (e) {
       print('Error loading user health records: $e');
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi khi tải dữ liệu: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.language == 'vi'
+                ? 'Lỗi khi tải dữ liệu: $e'
+                : 'Error loading data: $e',
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isAdmin = widget.userData['role'] == 'admin';
+    final lang = widget.language;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Text(
-          widget.userData['name'] ?? 'Chi tiết người dùng',
+          widget.userData['name'] ??
+              (lang == 'vi' ? 'Chi tiết người dùng' : 'User Details'),
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
@@ -95,6 +106,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadUserHealthRecords,
+            tooltip: lang == 'vi' ? 'Tải lại' : 'Refresh',
           ),
         ],
       ),
@@ -105,20 +117,20 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 child: Column(
                   children: [
                     // User Info Card
-                    _buildUserInfoCard(isAdmin),
+                    _buildUserInfoCard(isAdmin, lang),
 
                     // Statistics Cards
-                    _buildStatisticsCards(),
+                    _buildStatisticsCards(lang),
 
                     // Health Records List
-                    _buildHealthRecordsList(),
+                    _buildHealthRecordsList(lang),
                   ],
                 ),
               ),
     );
   }
 
-  Widget _buildUserInfoCard(bool isAdmin) {
+  Widget _buildUserInfoCard(bool isAdmin, String lang) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -161,7 +173,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            widget.userData['name'] ?? 'Chưa có tên',
+                            widget.userData['name'] ??
+                                (lang == 'vi' ? 'Chưa có tên' : 'No Name'),
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -178,9 +191,9 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                               color: Colors.orange[600],
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
-                              'ADMIN',
-                              style: TextStyle(
+                            child: Text(
+                              lang == 'vi' ? 'ADMIN' : 'ADMIN',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -191,7 +204,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'ID: ${widget.userId}',
+                      '${lang == 'vi' ? 'ID' : 'ID'}: ${widget.userData['userid'] ?? widget.userId}',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
@@ -205,33 +218,34 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           // Thông tin chi tiết
           _buildInfoRow(
             Icons.phone,
-            'Số điện thoại',
-            widget.userData['phone'] ?? 'Chưa có',
+            lang == 'vi' ? 'Số điện thoại' : 'Phone',
+            widget.userData['phone'] ?? (lang == 'vi' ? 'Chưa có' : 'N/A'),
           ),
           _buildInfoRow(
             Icons.email,
             'Email',
-            widget.userData['email'] ?? 'Chưa có',
+            widget.userData['email'] ?? (lang == 'vi' ? 'Chưa có' : 'N/A'),
           ),
           _buildInfoRow(
             widget.userData['gender'] == 'Male' ||
                     widget.userData['gender'] == 'Nam'
                 ? Icons.male
                 : Icons.female,
-            'Giới tính',
-            widget.userData['gender'] ?? 'Chưa xác định',
+            lang == 'vi' ? 'Giới tính' : 'Gender',
+            widget.userData['gender'] ??
+                (lang == 'vi' ? 'Chưa xác định' : 'Unknown'),
           ),
           if (widget.userData['birthYear'] != null)
             _buildInfoRow(
               Icons.cake,
-              'Năm sinh',
+              lang == 'vi' ? 'Năm sinh' : 'Birth Year',
               widget.userData['birthYear'].toString(),
             ),
           if (widget.userData['age'] != null)
             _buildInfoRow(
               Icons.person_outline,
-              'Tuổi',
-              '${widget.userData['age']} tuổi',
+              lang == 'vi' ? 'Tuổi' : 'Age',
+              '${widget.userData['age']}',
             ),
         ],
       ),
@@ -259,14 +273,14 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     );
   }
 
-  Widget _buildStatisticsCards() {
+  Widget _buildStatisticsCards(String lang) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           Expanded(
             child: _buildStatCard(
-              'Tổng số lần',
+              lang == 'vi' ? 'Tổng số lần' : 'Total',
               totalDiagnoses.toString(),
               Icons.analytics,
               Colors.blue[600]!,
@@ -275,7 +289,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildStatCard(
-              'Có nguy cơ',
+              lang == 'vi' ? 'Có nguy cơ' : 'High Risk',
               highRiskCount.toString(),
               Icons.warning,
               Colors.red[600]!,
@@ -284,7 +298,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildStatCard(
-              'Bình thường',
+              lang == 'vi' ? 'Bình thường' : 'Normal',
               normalCount.toString(),
               Icons.check_circle,
               Colors.green[600]!,
@@ -341,7 +355,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     );
   }
 
-  Widget _buildHealthRecordsList() {
+  Widget _buildHealthRecordsList(String lang) {
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -366,7 +380,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 Icon(Icons.medical_services, color: Colors.blue[800]),
                 const SizedBox(width: 8),
                 Text(
-                  'Lịch sử chẩn đoán',
+                  lang == 'vi' ? 'Lịch sử chẩn đoán' : 'Diagnosis History',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -378,8 +392,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           ),
 
           if (healthRecords.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(32),
+            Padding(
+              padding: const EdgeInsets.all(32),
               child: Center(
                 child: Column(
                   children: [
@@ -388,10 +402,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       size: 60,
                       color: Colors.grey,
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
-                      'Chưa có dữ liệu chẩn đoán',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                      lang == 'vi'
+                          ? 'Chưa có dữ liệu chẩn đoán'
+                          : 'No diagnosis data',
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -412,7 +428,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                   ),
               itemBuilder: (context, index) {
                 final record = healthRecords[index];
-                return _buildHealthRecordItem(record, index + 1);
+                return _buildHealthRecordItem(record, index + 1, lang);
               },
             ),
         ],
@@ -420,19 +436,53 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     );
   }
 
-  Widget _buildHealthRecordItem(Map<String, dynamic> record, int index) {
-    final hasRisk = record['target'] == 1;
+  Widget _buildHealthRecordItem(
+    Map<String, dynamic> record,
+    int index,
+    String lang,
+  ) {
+    // Lấy giá trị prediction và probability (nếu có)
+    final int? pred =
+        record['prediction'] != null
+            ? (record['prediction'] as num).toInt()
+            : null;
+    final double? prob =
+        record['probability'] != null
+            ? (record['probability'] as num).toDouble()
+            : null;
+
+    final bool hasRisk = pred == 1;
+    final bool isNormal = pred == 0;
+
+    // Lấy ngày giờ: ưu tiên 'timestamp', nếu không có thì fallback về 'created_at'
+    final dynamic ts = record['timestamp'] ?? record['created_at'];
+    final String dateStr = _formatDateTime(ts);
+
+    // Tạo dòng subtitle:
+    // - Nếu đã có prediction, hiển thị: "dd/MM/yyyy HH:mm  ·  xx.x%"
+    // - Nếu chưa có prediction, chỉ hiển thị: "dd/MM/yyyy HH:mm"
+    String subtitleText;
+    if (pred == null || prob == null) {
+      subtitleText = dateStr;
+    } else {
+      final percent = (prob * 100).toStringAsFixed(1);
+      subtitleText = '$dateStr · $percent%';
+    }
 
     return ExpansionTile(
       tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       title: Row(
         children: [
+          // Vòng số thứ tự
           Container(
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: hasRisk ? Colors.red[100] : Colors.green[100],
+              color:
+                  hasRisk
+                      ? Colors.red[100]
+                      : (isNormal ? Colors.green[100] : Colors.grey[200]),
               borderRadius: BorderRadius.circular(15),
             ),
             child: Center(
@@ -441,55 +491,71 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: hasRisk ? Colors.red[700] : Colors.green[700],
+                  color:
+                      hasRisk
+                          ? Colors.red[700]
+                          : (isNormal ? Colors.green[700] : Colors.grey[600]),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 12),
+
+          // Phần chính: "Chẩn đoán #n" và subtitle (ngày/giờ ± %)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Chẩn đoán #$index',
+                  lang == 'vi' ? 'Chẩn đoán #$index' : 'Diagnosis #$index',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  _formatDateTime(record['created_at']),
+                  subtitleText,
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: hasRisk ? Colors.red[50] : Colors.green[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: hasRisk ? Colors.red[200]! : Colors.green[200]!,
+
+          // Nếu đã có kết quả (pred != null), mới show badge “Bình thường” hoặc “Có nguy cơ”
+          if (pred != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: hasRisk ? Colors.red[50] : Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasRisk ? Colors.red[200]! : Colors.green[200]!,
+                ),
+              ),
+              child: Text(
+                hasRisk
+                    ? (lang == 'vi' ? 'Có nguy cơ' : 'High Risk')
+                    : (lang == 'vi' ? 'Bình thường' : 'Normal'),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: hasRisk ? Colors.red[700] : Colors.green[700],
+                ),
               ),
             ),
-            child: Text(
-              hasRisk ? 'Có nguy cơ' : 'Bình thường',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: hasRisk ? Colors.red[700] : Colors.green[700],
-              ),
-            ),
-          ),
+
+          // Nếu chưa có prediction thì không show badge
         ],
       ),
-      children: [_buildHealthDetailTable(record)],
+      children: [_buildHealthDetailTable(record, lang)],
     );
   }
 
-  Widget _buildHealthDetailTable(Map<String, dynamic> record) {
+  Widget _buildHealthDetailTable(Map<String, dynamic> record, String lang) {
+    // Lấy map nested "input_data"
+    final input = record['input_data'] as Map<String, dynamic>?;
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
@@ -498,58 +564,90 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
+          Padding(
+            padding: const EdgeInsets.all(12),
             child: Text(
-              'Chi tiết thông số',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              lang == 'vi' ? 'Chi tiết thông số' : 'Measurement Details',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
           Table(
             columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(3)},
             children: [
+              // Loại đau ngực: record['input_data']['cp']
               _buildTableRow(
-                'Loại đau ngực',
-                _getChestPainDescription(record['cp']),
+                lang == 'vi' ? 'Loại đau ngực' : 'Chest Pain',
+                _getChestPainDescription(input?['cp'], lang),
               ),
+
+              // Huyết áp nghỉ: record['input_data']['trestbps']
               _buildTableRow(
-                'Huyết áp nghỉ',
-                record['trestbps'] != null
-                    ? '${record['trestbps']} mmHg'
-                    : 'N/A',
+                lang == 'vi' ? 'Huyết áp nghỉ' : 'Resting BP',
+                input != null && input['trestbps'] != null
+                    ? '${input['trestbps']} mmHg'
+                    : (lang == 'vi' ? 'N/A' : 'N/A'),
               ),
+
+              // Cholesterol: record['input_data']['chol']
               _buildTableRow(
-                'Cholesterol',
-                record['chol'] != null ? '${record['chol']} mg/dL' : 'N/A',
+                lang == 'vi' ? 'Cholesterol' : 'Cholesterol',
+                input != null && input['chol'] != null
+                    ? '${input['chol']} mg/dL'
+                    : (lang == 'vi' ? 'N/A' : 'N/A'),
               ),
+
+              // Đường huyết đói: record['input_data']['fbs']
               _buildTableRow(
-                'Đường huyết đói',
-                _getFbsDescription(record['fbs']),
+                lang == 'vi' ? 'Đường huyết đói' : 'Fasting Blood Sugar',
+                _getFbsDescription(input?['fbs'], lang),
               ),
+
+              // Điện tâm đồ nghỉ: record['input_data']['restecg']
               _buildTableRow(
-                'Điện tâm đồ nghỉ',
-                _getRestEcgDescription(record['restecg']),
+                lang == 'vi' ? 'Điện tâm đồ nghỉ' : 'Rest ECG',
+                _getRestEcgDescription(input?['restecg'], lang),
               ),
+
+              // Nhịp tim tối đa: record['input_data']['thalach']
               _buildTableRow(
-                'Nhịp tim tối đa',
-                record['thalach'] != null ? '${record['thalach']} bpm' : 'N/A',
+                lang == 'vi' ? 'Nhịp tim tối đa' : 'Max Heart Rate',
+                input != null && input['thalach'] != null
+                    ? '${input['thalach']} bpm'
+                    : (lang == 'vi' ? 'N/A' : 'N/A'),
               ),
+
+              // Exercise Angina: record['input_data']['exang']
               _buildTableRow(
-                'Đau thắt ngực khi vận động',
-                _getExangDescription(record['exang']),
+                lang == 'vi' ? 'Đau khi vận động' : 'Exercise Angina',
+                _getExangDescription(input?['exang'], lang),
               ),
+
+              // ST Depression: record['input_data']['oldpeak']
               _buildTableRow(
-                'ST Depression',
-                record['oldpeak']?.toString() ?? 'N/A',
+                lang == 'vi' ? 'ST Depression' : 'ST Depression',
+                input != null && input['oldpeak'] != null
+                    ? input['oldpeak'].toString()
+                    : (lang == 'vi' ? 'N/A' : 'N/A'),
               ),
-              _buildTableRow('Dốc ST', _getSlopeDescription(record['slope'])),
+
+              // ST Slope: record['input_data']['slope']
               _buildTableRow(
-                'Số mạch máu chính',
-                record['ca']?.toString() ?? 'N/A',
+                lang == 'vi' ? 'Dốc ST' : 'ST Slope',
+                _getSlopeDescription(input?['slope'], lang),
               ),
+
+              // Major Vessels: record['input_data']['ca']
               _buildTableRow(
-                'Thalassemia',
-                _getThalDescription(record['thal']),
+                lang == 'vi' ? 'Số mạch máu chính' : 'Major Vessels',
+                input != null && input['ca'] != null
+                    ? input['ca'].toString()
+                    : (lang == 'vi' ? 'N/A' : 'N/A'),
+              ),
+
+              // Thalassemia: record['input_data']['thal']
+              _buildTableRow(
+                lang == 'vi' ? 'Thalassemia' : 'Thalassemia',
+                _getThalDescription(input?['thal'], lang),
               ),
             ],
           ),
@@ -581,7 +679,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   }
 
   String _formatDateTime(dynamic dateTime) {
-    if (dateTime == null) return 'Chưa có';
+    if (dateTime == null) return widget.language == 'vi' ? 'Chưa có' : 'N/A';
 
     try {
       DateTime dt;
@@ -589,64 +687,95 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         dt = DateTime.parse(dateTime);
       } else if (dateTime is Timestamp) {
         dt = dateTime.toDate();
+      } else if (dateTime is DateTime) {
+        dt = dateTime;
       } else {
-        return 'Chưa có';
+        return widget.language == 'vi' ? 'Chưa có' : 'N/A';
       }
       return DateFormat('dd/MM/yyyy HH:mm').format(dt);
     } catch (e) {
-      return 'Chưa có';
+      return widget.language == 'vi' ? 'Chưa có' : 'N/A';
     }
   }
 
   // Helper methods for data description
-  String _getChestPainDescription(dynamic cp) {
-    if (cp == null) return 'N/A';
-    const descriptions = {
+  String _getChestPainDescription(dynamic cp, String lang) {
+    if (cp == null) return lang == 'vi' ? 'N/A' : 'N/A';
+    final descriptionsVi = {
       '0': 'Đau thắt ngực điển hình',
       '1': 'Đau thắt ngực không điển hình',
       '2': 'Đau không do thắt ngực',
       '3': 'Không triệu chứng',
     };
-    return descriptions[cp.toString()] ?? cp.toString();
+    final descriptionsEn = {
+      '0': 'Typical angina',
+      '1': 'Atypical angina',
+      '2': 'Non-anginal pain',
+      '3': 'Asymptomatic',
+    };
+    return lang == 'vi'
+        ? (descriptionsVi[cp.toString()] ?? cp.toString())
+        : (descriptionsEn[cp.toString()] ?? cp.toString());
   }
 
-  String _getFbsDescription(dynamic fbs) {
-    if (fbs == null) return 'N/A';
-    if (fbs.toString() == '1') return '> 120 mg/dL';
-    if (fbs.toString() == '0') return '≤ 120 mg/dL';
+  String _getFbsDescription(dynamic fbs, String lang) {
+    if (fbs == null) return lang == 'vi' ? 'Chưa nhập' : 'Not entered';
+    if (fbs.toString() == '1') {
+      return lang == 'vi' ? '> 120 mg/dL' : '> 120 mg/dL';
+    }
+    if (fbs.toString() == '0') {
+      return lang == 'vi' ? '≤ 120 mg/dL' : '≤ 120 mg/dL';
+    }
     return fbs.toString();
   }
 
-  String _getRestEcgDescription(dynamic restecg) {
-    if (restecg == null) return 'N/A';
-    const descriptions = {
+  String _getRestEcgDescription(dynamic restecg, String lang) {
+    if (restecg == null) return lang == 'vi' ? 'Chưa nhập' : 'Not entered';
+    final descriptionsVi = {
       '0': 'Bình thường',
       '1': 'Bất thường ST-T',
       '2': 'Phì đại thất trái',
     };
-    return descriptions[restecg.toString()] ?? restecg.toString();
+    final descriptionsEn = {
+      '0': 'Normal',
+      '1': 'ST-T abnormality',
+      '2': 'Left ventricular hypertrophy',
+    };
+    return lang == 'vi'
+        ? (descriptionsVi[restecg.toString()] ?? restecg.toString())
+        : (descriptionsEn[restecg.toString()] ?? restecg.toString());
   }
 
-  String _getExangDescription(dynamic exang) {
-    if (exang == null) return 'N/A';
-    if (exang.toString() == '1') return 'Có';
-    if (exang.toString() == '0') return 'Không';
+  String _getExangDescription(dynamic exang, String lang) {
+    if (exang == null) return lang == 'vi' ? 'Chưa nhập' : 'Not entered';
+    if (exang.toString() == '1') return lang == 'vi' ? 'Có' : 'Yes';
+    if (exang.toString() == '0') return lang == 'vi' ? 'Không' : 'No';
     return exang.toString();
   }
 
-  String _getSlopeDescription(dynamic slope) {
-    if (slope == null) return 'N/A';
-    const descriptions = {'0': 'Dốc lên', '1': 'Phẳng', '2': 'Dốc xuống'};
-    return descriptions[slope.toString()] ?? slope.toString();
+  String _getSlopeDescription(dynamic slope, String lang) {
+    if (slope == null) return lang == 'vi' ? 'Chưa nhập' : 'Not entered';
+    final descriptionsVi = {'0': 'Dốc lên', '1': 'Phẳng', '2': 'Dốc xuống'};
+    final descriptionsEn = {'0': 'Upsloping', '1': 'Flat', '2': 'Downsloping'};
+    return lang == 'vi'
+        ? (descriptionsVi[slope.toString()] ?? slope.toString())
+        : (descriptionsEn[slope.toString()] ?? slope.toString());
   }
 
-  String _getThalDescription(dynamic thal) {
-    if (thal == null) return 'N/A';
-    const descriptions = {
+  String _getThalDescription(dynamic thal, String lang) {
+    if (thal == null) return lang == 'vi' ? 'Chưa nhập' : 'Not entered';
+    final descriptionsVi = {
       '1': 'Bình thường',
       '2': 'Khiếm khuyết cố định',
       '3': 'Khiếm khuyết có thể phục hồi',
     };
-    return descriptions[thal.toString()] ?? thal.toString();
+    final descriptionsEn = {
+      '1': 'Normal',
+      '2': 'Fixed defect',
+      '3': 'Reversible defect',
+    };
+    return lang == 'vi'
+        ? (descriptionsVi[thal.toString()] ?? thal.toString())
+        : (descriptionsEn[thal.toString()] ?? thal.toString());
   }
 }

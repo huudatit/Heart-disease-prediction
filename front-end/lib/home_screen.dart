@@ -25,11 +25,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Map<String, Map<String, String>> metrics = {'en': {}, 'vi': {}};
 
+  // Dùng để giữ Future của history, tránh load lại khi rebuild
+  late Future<List<Map<String, dynamic>>> _futureHistory;
+
   @override
   void initState() {
     super.initState();
     userData = widget.userData;
     _loadMetricsFromPrefs();
+    _futureHistory = _getHealthHistory();
   }
 
   void _logout() async {
@@ -45,15 +49,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Cải tiến method để lưu thông tin sức khỏe vào subcollection
+  // Dùng lại hàm của bạn để lưu dữ liệu từ SharedPreferences lên Firestore
   void _saveHealthDataToFirestore() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Kiểm tra xem có dữ liệu sức khỏe không
+    // Kiểm tra có dữ liệu health hay không
     final age = prefs.getString('age');
-    if (age == null) return; // Không có dữ liệu thì không lưu
+    if (age == null) return;
 
-    // Lấy tất cả dữ liệu sức khỏe từ SharedPreferences
     final healthData = {
       'age': age,
       'sex': prefs.getString('sex'),
@@ -78,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
     };
 
     try {
-      // Tìm user document
       final userQuery =
           await FirebaseFirestore.instance
               .collection('users')
@@ -88,14 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (userQuery.docs.isNotEmpty) {
         final userDocId = userQuery.docs.first.id;
 
-        // Tạo một document mới trong subcollection 'health_records'
+        // Thêm mới health_records
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userDocId)
             .collection('health_records')
             .add(healthData);
 
-        // Cập nhật thông tin lần khám cuối vào user document
+        // Cập nhật lần khám cuối và tăng tổng số bản ghi
         await userQuery.docs.first.reference.update({
           'last_health_check': FieldValue.serverTimestamp(),
           'total_health_records': FieldValue.increment(1),
@@ -108,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Method để lấy lịch sử khám bệnh
+  // Lấy 10 bản ghi gần nhất
   Future<List<Map<String, dynamic>>> _getHealthHistory() async {
     try {
       final userQuery =
@@ -120,16 +122,17 @@ class _HomeScreenState extends State<HomeScreen> {
       if (userQuery.docs.isNotEmpty) {
         final userDocId = userQuery.docs.first.id;
 
-        final healthRecords =
+        final healthRecordsQuery =
             await FirebaseFirestore.instance
                 .collection('users')
                 .doc(userDocId)
                 .collection('health_records')
-                .orderBy('created_at', descending: true)
-                .limit(10) // Lấy 10 bản ghi gần nhất
+                .where('timestamp', isNotEqualTo: null)
+                .orderBy('timestamp', descending: true)
+                .limit(10)
                 .get();
 
-        return healthRecords.docs
+        return healthRecordsQuery.docs
             .map((doc) => {'id': doc.id, ...doc.data()})
             .toList();
       }
@@ -139,182 +142,161 @@ class _HomeScreenState extends State<HomeScreen> {
     return [];
   }
 
-  // Method để hiển thị lịch sử khám bệnh
-  void _showHealthHistory() async {
-    final history = await _getHealthHistory();
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(
-              _language == 'vi' ? 'Lịch sử khám bệnh' : 'Health History',
-              style: TextStyle(
-                color: Colors.blue[800],
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child:
-                  history.isEmpty
-                      ? Center(
-                        child: Text(
-                          _language == 'vi'
-                              ? 'Chưa có lịch sử khám bệnh'
-                              : 'No health history available',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      )
-                      : ListView.builder(
-                        itemCount: history.length,
-                        itemBuilder: (context, index) {
-                          final record = history[index];
-                          final createdAt = record['created_at'] as Timestamp?;
-                          final dateStr =
-                              createdAt != null
-                                  ? DateFormat(
-                                    'dd/MM/yyyy HH:mm',
-                                  ).format(createdAt.toDate())
-                                  : 'N/A';
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.blue[100],
-                                child: Icon(
-                                  Icons.health_and_safety,
-                                  color: Colors.blue[800],
-                                ),
-                              ),
-                              title: Text(
-                                '${_language == 'vi' ? 'Khám ngày' : 'Check-up on'} $dateStr',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${_language == 'vi' ? 'Tuổi' : 'Age'}: ${record['age']}, '
-                                '${_language == 'vi' ? 'Huyết áp' : 'BP'}: ${record['trestbps'] ?? 'N/A'}',
-                              ),
-                              trailing: Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: Colors.grey[600],
-                              ),
-                              onTap: () => _showHealthRecordDetail(record),
-                            ),
-                          );
-                        },
-                      ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  _language == 'vi' ? 'Đóng' : 'Close',
-                  style: TextStyle(color: Colors.blue[800]),
-                ),
-              ),
-            ],
-          ),
-    );
-  }
-
-  // Method để hiển thị chi tiết một bản ghi khám bệnh
+  // Hàm hiển thị chi tiết một bản ghi (giữ lại từ bạn)
   void _showHealthRecordDetail(Map<String, dynamic> record) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(
-              _language == 'vi'
-                  ? 'Chi tiết khám bệnh'
-                  : 'Health Record Details',
-              style: TextStyle(
-                color: Colors.blue[800],
-                fontWeight: FontWeight.bold,
+  final input = record['input_data'] as Map<String, dynamic>?;
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        _language == 'vi' ? 'Chi tiết khám bệnh' : 'Health Record Details',
+        style: TextStyle(
+          color: Colors.blue[800],
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Age:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Tuổi' : 'Age'}:',
+                input != null 
+                  ? '${input['age'] ?? 'N/A'} ${_language == 'vi' ? 'tuổi' : 'years'}'
+                  : 'N/A',
               ),
-            ),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Tuổi' : 'Age'}:',
-                      '${record['age']} ${_language == 'vi' ? 'tuổi' : 'years'}',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Giới tính' : 'Sex'}:',
-                      _getSexDescription(record['sex']),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Đau ngực' : 'Chest Pain'}:',
-                      _getChestPainDescription(record['cp'], _language),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Huyết áp nghỉ' : 'Resting BP'}:',
-                      '${record['trestbps'] ?? 'N/A'} mmHg',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Cholesterol' : 'Cholesterol'}:',
-                      '${record['chol'] ?? 'N/A'} mg/dL',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Đường huyết đói' : 'Fasting Blood Sugar'}:',
-                      _getFbsDescription(record['fbs'], _language),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Điện tâm đồ' : 'Rest ECG'}:',
-                      _getRestEcgDescription(record['restecg'], _language),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Nhịp tim tối đa' : 'Max Heart Rate'}:',
-                      '${record['thalach'] ?? 'N/A'} bpm',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Đau khi vận động' : 'Exercise Angina'}:',
-                      _getExangDescription(record['exang']),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'ST giảm' : 'ST Depression'}:',
-                      record['oldpeak'] ?? 'N/A',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Dốc ST' : 'ST Slope'}:',
-                      _getSlopeDescription(record['slope'], _language),
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Số mạch chính' : 'Major Vessels'}:',
-                      record['ca'] ?? 'N/A',
-                    ),
-                    _buildDetailRow(
-                      '${_language == 'vi' ? 'Thalassemia' : 'Thalassemia'}:',
-                      _getThalDescription(record['thal'], _language),
-                    ),
-                  ],
+
+              // Sex:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Giới tính' : 'Sex'}:',
+                input != null 
+                  ? _getSexDescription(input['sex']?.toString()) 
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Chest Pain:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Đau ngực' : 'Chest Pain'}:',
+                input != null
+                  ? _getChestPainDescription(input['cp']?.toString(), _language)
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Resting BP:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Huyết áp nghỉ' : 'Resting BP'}:',
+                input != null
+                  ? '${input['trestbps'] ?? 'N/A'} mmHg'
+                  : 'N/A',
+              ),
+
+              // Cholesterol:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Cholesterol' : 'Cholesterol'}:',
+                input != null
+                  ? '${input['chol'] ?? 'N/A'} mg/dL'
+                  : 'N/A',
+              ),
+
+              // Fasting Blood Sugar:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Đường huyết đói' : 'Fasting Blood Sugar'}:',
+                input != null
+                  ? _getFbsDescription(input['fbs']?.toString(), _language)
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Rest ECG:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Điện tâm đồ' : 'Rest ECG'}:',
+                input != null
+                  ? _getRestEcgDescription(input['restecg']?.toString(), _language)
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Max Heart Rate:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Nhịp tim tối đa' : 'Max Heart Rate'}:',
+                input != null
+                  ? '${input['thalach'] ?? 'N/A'} bpm'
+                  : 'N/A',
+              ),
+
+              // Exercise Angina:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Đau khi vận động' : 'Exercise Angina'}:',
+                input != null
+                  ? _getExangDescription(input['exang']?.toString())
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // ST Depression:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'ST giảm' : 'ST Depression'}:',
+                input != null
+                  ? (input['oldpeak']?.toString() ?? 'N/A')
+                  : 'N/A',
+              ),
+
+              // ST Slope:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Dốc ST' : 'ST Slope'}:',
+                input != null
+                  ? _getSlopeDescription(input['slope']?.toString(), _language)
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Major Vessels:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Số mạch chính' : 'Major Vessels'}:',
+                input != null
+                  ? (input['ca']?.toString() ?? 'N/A')
+                  : 'N/A',
+              ),
+
+              // Thalassemia:
+              _buildDetailRow(
+                '${_language == 'vi' ? 'Thalassemia' : 'Thalassemia'}:',
+                input != null
+                  ? _getThalDescription(input['thal']?.toString(), _language)
+                  : (_language == 'vi' ? 'Chưa nhập' : 'Not entered'),
+              ),
+
+              // Prediction + Probability (vì hai trường này là top‐level)
+              if (record.containsKey('prediction')) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${_language == 'vi' ? 'Kết quả' : 'Prediction'}: '
+                  '${record['prediction'] == 1 ? (_language == 'vi' ? 'Nguy cơ cao' : 'High risk') : (_language == 'vi' ? 'Nguy cơ thấp' : 'Low risk')}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  _language == 'vi' ? 'Đóng' : 'Close',
-                  style: TextStyle(color: Colors.blue[800]),
+                Text(
+                  '${_language == 'vi' ? 'Xác suất' : 'Probability'}: '
+                  '${( (record['probability'] as num) * 100 ).toStringAsFixed(2)}%',
                 ),
-              ),
+              ],
             ],
           ),
-    );
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            _language == 'vi' ? 'Đóng' : 'Close',
+            style: TextStyle(color: Colors.blue[800]),
+          ),
+        ),
+      ],
+    ),
+  );
   }
+
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
@@ -323,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 140,
             child: Text(
               label,
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -340,7 +322,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       lastUpdated = prefs.getString('last_updated');
 
-      // Kiểm tra nếu có data mới thì hiển thị, không thì hiển thị default
       final age = prefs.getString('age');
       final sex = prefs.getString('sex');
       final cp = prefs.getString('cp');
@@ -398,11 +379,17 @@ class _HomeScreenState extends State<HomeScreen> {
       };
     });
 
-    // Lưu dữ liệu vào Firestore subcollection mỗi khi có dữ liệu mới
-    _saveHealthDataToFirestore();
+    // Đồng bộ data mới lên Firestore
+    // Chỉ lưu nếu có "need_to_sync" = true
+    // final needSync = prefs.getBool('need_to_sync') ?? false;
+    // if (needSync) {
+    //   _saveHealthDataToFirestore();
+    //   // Đánh dấu đã sync xong, tránh ghi lại
+    //   await prefs.setBool('need_to_sync', false);
+    // }
   }
 
-  // Helper methods để mô tả các giá trị
+  // Các helper methods chuyển đổi giá trị, giống bạn đã viết
   String _getSexDescription(String? sex) {
     if (sex == '1') return _language == 'vi' ? "Nam" : "Male";
     if (sex == '0') return _language == 'vi' ? "Nữ" : "Female";
@@ -417,7 +404,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getChestPainDescription(String? cp, String lang) {
     if (cp == null) return lang == 'vi' ? "Chưa nhập" : "Not entered";
-
     final descriptions = {
       'en': {
         '0': 'Typical angina',
@@ -432,24 +418,21 @@ class _HomeScreenState extends State<HomeScreen> {
         '3': 'Không triệu chứng',
       },
     };
-
     return descriptions[lang]?[cp] ?? cp;
   }
 
   String _getFbsDescription(String? fbs, String lang) {
     if (fbs == null) return lang == 'vi' ? "Chưa nhập" : "Not entered";
-
     if (fbs == '1') {
-      return lang == 'vi' ? "> 120 mg/dL" : "> 120 mg/dL";
+      return "> 120 mg/dL";
     } else if (fbs == '0') {
-      return lang == 'vi' ? "≤ 120 mg/dL" : "≤ 120 mg/dL";
+      return "≤ 120 mg/dL";
     }
     return fbs;
   }
 
   String _getRestEcgDescription(String? restecg, String lang) {
     if (restecg == null) return lang == 'vi' ? "Chưa nhập" : "Not entered";
-
     final descriptions = {
       'en': {
         '0': 'Normal',
@@ -462,24 +445,20 @@ class _HomeScreenState extends State<HomeScreen> {
         '2': 'Phì đại thất trái',
       },
     };
-
     return descriptions[lang]?[restecg] ?? restecg;
   }
 
   String _getSlopeDescription(String? slope, String lang) {
     if (slope == null) return lang == 'vi' ? "Chưa nhập" : "Not entered";
-
     final descriptions = {
       'en': {'0': 'Upsloping', '1': 'Flat', '2': 'Downsloping'},
       'vi': {'0': 'Dốc lên', '1': 'Phẳng', '2': 'Dốc xuống'},
     };
-
     return descriptions[lang]?[slope] ?? slope;
   }
 
   String _getThalDescription(String? thal, String lang) {
     if (thal == null) return lang == 'vi' ? "Chưa nhập" : "Not entered";
-
     final descriptions = {
       'en': {'1': 'Normal', '2': 'Fixed defect', '3': 'Reversible defect'},
       'vi': {
@@ -488,7 +467,6 @@ class _HomeScreenState extends State<HomeScreen> {
         '3': 'Khiếm khuyết có thể phục hồi',
       },
     };
-
     return descriptions[lang]?[thal] ?? thal;
   }
 
@@ -699,8 +677,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Hàm gọi prediction qua API Flask
   void predictHeartDisease(Map<String, dynamic> input) async {
-    final url = Uri.parse('http://192.168.1.120:5000/predict');
+    final url = Uri.parse('http://192.168.1.111:5000/predict');
 
     try {
       final response = await http.post(
@@ -722,9 +701,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   prediction: prediction,
                   probability: probability.toDouble(),
                   inputData: input,
+                  language: _language,
                 ),
           ),
-        );
+          ).then((_) {
+             // Khi ResultScreen được pop, home sẽ vào đây
+            _loadMetricsFromPrefs();
+            setState(() {
+            // buộc rebuild để hiển thị lastUpdated mới
+              
+            });
+          });
       } else {
         throw Exception("Lỗi từ server: ${response.statusCode}");
       }
@@ -738,7 +725,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedMetrics = metrics[_language]!;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDarkMode ? Colors.grey[900] : Colors.grey[100];
     final cardColor = isDarkMode ? Colors.grey[800] : Colors.white;
@@ -789,13 +775,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          // Khi kéo xuống, reload lại history
+          setState(() {
+            _futureHistory = _getHealthHistory();
+          });
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Card
+              // ---------------- Profile Card ----------------
               Card(
                 elevation: 4,
                 color: cardColor,
@@ -847,7 +840,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              // Quick Actions
+              // ---------------- Quick Actions ----------------
               Row(
                 children: [
                   Expanded(
@@ -860,16 +853,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               : "Health Input",
                       color: Colors.blue,
                       onTap: () async {
-                        // Sử dụng Navigator.push và chờ kết quả trả về
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const InputFormScreen(),
+                            builder: (_) => InputFormScreen(language: _language),
                           ),
                         );
-
-                        // Sau khi quay lại từ InputFormScreen, reload dữ liệu
+                        // Sau khi quay lại, reload data & history
                         _loadMetricsFromPrefs();
+                        setState(() {
+                          _futureHistory = _getHealthHistory();
+                        });
                       },
                     ),
                   ),
@@ -880,19 +874,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.analytics,
                       title:
                           _language == 'vi'
-                              ? "Kết quả dự đoán"
-                              : "Prediction Results",
-                      color: Colors.deepOrange,
+                              ? "Thông tin các chỉ số sức khỏe"
+                              : "Health Metrics Info",
+                      color: Colors.green,
                       onTap:
                           () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder:
-                                  (_) => const ResultScreen(
-                                    prediction: 1,
-                                    probability: 0.85,
-                                    inputData: {},
+                              builder: (_) => InfoScreen(
+                                    language: _language,
                                   ),
+                              // Ở đây tôi để tạm là quay lại InputFormScreen.
+                              // Bạn có thể thay thành màn hình nào phù hợp.
                             ),
                           ),
                     ),
@@ -902,7 +895,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              // Last Updated Info
+              // ---------------- Last Updated Info ----------------
               if (lastUpdated != null) ...[
                 Container(
                   width: double.infinity,
@@ -924,9 +917,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 20),
               ],
 
-              // Metrics Section
+              // ---------------- Diagnosis History Section ----------------
               Text(
-                _language == 'vi' ? "Các chỉ số đo:" : "Measured Metrics:",
+                _language == 'vi' ? "Lịch sử chẩn đoán" : "Diagnosis History",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -935,73 +928,147 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 10),
 
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.3,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                ),
-                itemCount: selectedMetrics.length,
-                itemBuilder: (context, index) {
-                  final entry = selectedMetrics.entries.toList()[index];
-                  final isNotEntered =
-                      entry.value.contains('Not entered') ||
-                      entry.value.contains('Chưa nhập');
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: isNotEntered ? Colors.grey[200] : cardColor,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _futureHistory,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(
+                          color: Colors.blue[800],
                         ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            entry.key,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color:
-                                  isNotEntered
-                                      ? Colors.grey[600]
-                                      : (isDarkMode
-                                          ? Colors.white
-                                          : Colors.black),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            entry.value,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color:
-                                  isNotEntered
-                                      ? Colors.grey[500]
-                                      : (isDarkMode
-                                          ? Colors.white70
-                                          : Colors.black87),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
                       ),
-                    ),
-                  );
+                    );
+                  } else if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        _language == 'vi'
+                            ? "Lỗi khi tải lịch sử"
+                            : "Error loading history",
+                        style: TextStyle(color: Colors.red[400]),
+                      ),
+                    );
+                  } else {
+                    final history = snapshot.data!;
+                    if (history.isEmpty) {
+                      return Center(
+                        child: Text(
+                          _language == 'vi'
+                              ? "Chưa có lịch sử chẩn đoán"
+                              : "No diagnosis history yet",
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      itemCount: history.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final record = history[index];
+                        // Ép kiểu Timestamp
+                        final createdAt = record['timestamp'] as Timestamp?;
+                        final dateStr =
+                            createdAt != null
+                                ? DateFormat(
+                                  'dd/MM/yyyy HH:mm',
+                                ).format(createdAt.toDate())
+                                : 'N/A';
+
+                        // Lấy prediction + probability nếu có
+                        final int? pred =
+                            record['prediction'] != null
+                                ? (record['prediction'] as int)
+                                : null;
+                        final double? prob =
+                            record['probability'] != null
+                                ? (record['probability'] as num).toDouble()
+                                : null;
+
+                        final bool isHighRisk = pred == 1;
+
+                        return GestureDetector(
+                          onTap: () {
+                            // Hiển thị chi tiết khi bấm
+                            _showHealthRecordDetail(record);
+                          },
+                          child: Card(
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor:
+                                    isHighRisk
+                                        ? Colors.red[100]
+                                        : Colors.green[100],
+                                child: Icon(
+                                  isHighRisk
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.check_circle_outline,
+                                  color:
+                                      isHighRisk
+                                          ? Colors.red[700]
+                                          : Colors.green[700],
+                                ),
+                              ),
+                              title: Text(
+                                '$dateStr',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                pred != null && prob != null
+                                    ? (isHighRisk
+                                            ? (_language == 'vi'
+                                                ? 'Nguy cơ cao'
+                                                : 'High Risk')
+                                            : (_language == 'vi'
+                                                ? 'Nguy cơ thấp'
+                                                : 'Low Risk')) +
+                                        ' · ${(prob * 100).toStringAsFixed(1)}%'
+                                    : (_language == 'vi'
+                                        ? 'Chưa có kết quả'
+                                        : 'No result'),
+                                style: TextStyle(
+                                  color:
+                                      isHighRisk
+                                          ? Colors.red[700]
+                                          : Colors.green[700],
+                                ),
+                              ),
+                              trailing: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
                 },
               ),
+
+              const SizedBox(height: 20),
+
+              // ---------------- (Tùy chọn) Metrics Section (nếu vẫn muốn giữ) ----------------
+              // Ví dụ: Bạn có thể hiển thị lại GridView metrics ở đây nếu cần
+              // Text(
+              //   _language == 'vi' ? "Các chỉ số đo:" : "Measured Metrics:",
+              //   style: TextStyle(
+              //     fontWeight: FontWeight.bold,
+              //     fontSize: 18,
+              //     color: isDarkMode ? Colors.white : Colors.black,
+              //   ),
+              // ),
+              // const SizedBox(height: 10),
+              // GridView.builder(...),
             ],
           ),
         ),

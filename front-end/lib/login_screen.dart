@@ -6,7 +6,7 @@ import 'home_screen.dart';
 import 'admin_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({Key? key}) : super(key: key);
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -15,8 +15,48 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phoneEmailController = TextEditingController();
   bool _isLoading = false;
-  bool _useEmailLogin = false;
-  bool _isCheckingAutoLogin = true;
+  bool _useEmailLogin = false; // nếu true → nhập email; false → nhập phone
+  bool _isCheckingAutoLogin =
+      true; // để hiển thị màn loading khi kiểm tra SharedPreferences
+
+  // 1. Biến lưu ngôn ngữ hiện tại (mặc định "en")
+  String _language = 'en';
+
+  // 2. Map chứa tất cả các nhãn theo 2 ngôn ngữ
+  final Map<String, Map<String, String>> _labels = {
+    'en': {
+      'appTitle': 'Health System',
+      'checkingLogin': 'Checking login status...',
+      'hintPhone': 'Phone Number',
+      'hintEmail': 'Email',
+      'loginByEmail': 'Login with Phone',
+      'loginByPhone': 'Login with Email',
+      'btnLogin': 'Log In',
+      'noAccount': 'Don\'t have an account? Sign up',
+      'tryGuest': 'Try without login',
+      'enterPhone': 'Please enter phone number',
+      'enterEmail': 'Please enter email',
+      'userNotFound': 'Not registered',
+      'hello': 'Welcome',
+      'logout': 'Logout',
+    },
+    'vi': {
+      'appTitle': 'Hệ Thống Y Tế',
+      'checkingLogin': 'Đang kiểm tra thông tin đăng nhập...',
+      'hintPhone': 'Số điện thoại',
+      'hintEmail': 'Email',
+      'loginByEmail': 'Đăng nhập bằng số điện thoại',
+      'loginByPhone': 'Đăng nhập bằng email',
+      'btnLogin': 'Đăng Nhập',
+      'noAccount': 'Chưa có tài khoản? Đăng ký ngay',
+      'tryGuest': 'Dùng thử không cần đăng nhập',
+      'enterPhone': 'Vui lòng nhập số điện thoại',
+      'enterEmail': 'Vui lòng nhập email',
+      'userNotFound': 'Chưa được đăng ký',
+      'hello': 'Xin chào',
+      'logout': 'Đăng xuất',
+    },
+  };
 
   @override
   void initState() {
@@ -24,32 +64,42 @@ class _LoginScreenState extends State<LoginScreen> {
     _checkAutoLogin();
   }
 
-  // Kiểm tra auto login khi mở app
+  /// 3. Kiểm tra SharedPreferences + Firestore để tự động login
   Future<void> _checkAutoLogin() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedPhone = prefs.getString('phone');
       final savedEmail = prefs.getString('email');
-      final savedRole = prefs.getString('userRole');
+      final savedRole = prefs.getString('role'); // chúng ta chỉ đọc key "role"
 
-      if ((savedPhone != null || savedEmail != null) && savedRole != null) {
-        // Có thông tin đăng nhập đã lưu, kiểm tra trong Firebase
-        final query = FirebaseFirestore.instance.collection('users');
-        final userSnapshot =
-            await query
-                .where(
-                  savedPhone != null ? 'phone' : 'email',
-                  isEqualTo: savedPhone ?? savedEmail,
-                )
-                .get();
+      // Nếu đã từng lưu role và ít nhất có phone hoặc email, ta gọi Firestore để xác thực lại role thực tế
+      if (savedRole != null && (savedPhone != null || savedEmail != null)) {
+        QuerySnapshot userSnapshot;
+        if (savedPhone != null) {
+          userSnapshot =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('phone', isEqualTo: savedPhone)
+                  .get();
+        } else {
+          userSnapshot =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('email', isEqualTo: savedEmail)
+                  .get();
+        }
 
         if (userSnapshot.docs.isNotEmpty) {
-          final userData = userSnapshot.docs.first.data();
-          final role = userData['role'] ?? 'user';
+          final raw = userSnapshot.docs.first.data();
+          final Map<String, dynamic> userData =
+              raw is Map<String, dynamic> ? raw : <String, dynamic>{};
 
-          // Điều hướng dựa trên role
+          final String roleFromFirestore =
+              (userData['role'] as String?) ?? 'user';
+
+          // Nếu đang hiển thị và trang này vẫn mount, chuyển hướng
           if (mounted) {
-            if (role == 'admin') {
+            if (roleFromFirestore == 'admin') {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const AdminDashboard()),
               );
@@ -60,14 +110,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               );
             }
-            return;
           }
+          return;
         }
       }
     } catch (e) {
       print('Error checking auto login: $e');
     }
 
+    // Nếu không đủ điều kiện auto-login, chuyển về màn login thật
     if (mounted) {
       setState(() {
         _isCheckingAutoLogin = false;
@@ -75,6 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// 4. Chuyển đến màn đăng ký
   void _navigateToSignUp() {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -97,14 +149,26 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _handleLogin() async {
+  /// 5. Xử lý nút Login khi người dùng bấm
+  Future<void> _handleLogin() async {
     final input = _phoneEmailController.text.trim();
-    if (input.isEmpty) {
+    final labels = _labels[_language]!;
+
+    // Nếu đang yêu cầu nhập phone nhưng rỗng, show lỗi
+    if (!_useEmailLogin && input.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Vui lòng nhập ${_useEmailLogin ? 'email' : 'số điện thoại'}',
-          ),
+          content: Text(labels['enterPhone']!),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+      return;
+    }
+    // Nếu đang yêu cầu nhập email nhưng rỗng, show lỗi
+    if (_useEmailLogin && input.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(labels['enterEmail']!),
           backgroundColor: Colors.red[600],
         ),
       );
@@ -122,16 +186,29 @@ class _LoginScreenState extends State<LoginScreen> {
               .where(_useEmailLogin ? 'email' : 'phone', isEqualTo: input)
               .get();
 
+      final labels2 = _labels[_language]!;
+
       if (userSnapshot.docs.isNotEmpty) {
-        final userData = userSnapshot.docs.first.data();
+        // Ép kiểu document.data() thành Map<String, dynamic>
+        final raw = userSnapshot.docs.first.data();
+        final Map<String, dynamic> userData =
+            raw is Map<String, dynamic> ? raw : <String, dynamic>{};
 
+        // Lấy role thực sự (đọc từ Firestore field "role")
+        final String role = (userData['role'] as String?) ?? 'user';
+
+        // Lưu phone/email + role vào SharedPreferences
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_useEmailLogin ? 'email' : 'phone', input);
+        if (_useEmailLogin) {
+          await prefs.setString('email', input);
+          await prefs.remove('phone');
+        } else {
+          await prefs.setString('phone', input);
+          await prefs.remove('email');
+        }
+        await prefs.setString('role', role); // LUÔN LUÔN LƯU key "role"
 
-        final role = userData['role'] ?? 'user';
-        // Lưu role để kiểm tra khi reload app
-        await prefs.setString('userRole', role);
-
+        // Chuyển hướng
         if (role == 'admin') {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const AdminDashboard()),
@@ -144,24 +221,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Xin chào ${userData['name']}!'),
+            content: Text('${labels2['hello']} ${userData['name']}!'),
             backgroundColor: Colors.green[600],
           ),
         );
       } else {
+        // Nếu không tìm thấy user tương ứng
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '${_useEmailLogin ? 'Email' : 'Số điện thoại'} chưa được đăng ký',
-            ),
+            content: Text(labels2['userNotFound']!),
             backgroundColor: Colors.red[600],
           ),
         );
       }
     } catch (e) {
+      // Nếu có lỗi kết nối
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi đăng nhập: $e'),
+          content: Text('Lỗi khi đăng nhập: $e'),
           backgroundColor: Colors.red[600],
         ),
       );
@@ -174,7 +251,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Hiển thị loading khi đang kiểm tra auto login
+    final labels = _labels[_language]!;
+
+    // 6. Nếu đang ở chế độ auto-login (kiểm tra SharedPreferences), hiển thị loading
     if (_isCheckingAutoLogin) {
       return Scaffold(
         backgroundColor: const Color(0xFFF0F8FF),
@@ -192,7 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Hệ Thống Y Tế',
+                labels['appTitle']!,
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -204,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
               CircularProgressIndicator(color: Colors.blue[800]),
               const SizedBox(height: 20),
               Text(
-                'Đang kiểm tra thông tin đăng nhập...',
+                labels['checkingLogin']!,
                 style: TextStyle(color: Colors.blue[600], fontSize: 16),
               ),
             ],
@@ -213,8 +292,57 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     }
 
+    // 7. Khi không còn auto-login nữa, hiển thị hẳn màn login
     return Scaffold(
       backgroundColor: const Color(0xFFF0F8FF),
+      appBar: AppBar(
+        title: Text(labels['appTitle']!),
+        backgroundColor: Colors.blue[800],
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          // 8. PopupMenuButton cho chuyển ngôn ngữ
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.language, color: Colors.white),
+            onSelected: (String value) {
+              setState(() {
+                _language = value; // 'en' hoặc 'vi'
+              });
+            },
+            itemBuilder:
+                (BuildContext context) => <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'en',
+                    child: Text(
+                      'English',
+                      style: TextStyle(
+                        color:
+                            _language == 'en' ? Colors.blue[800] : Colors.black,
+                        fontWeight:
+                            _language == 'en'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'vi',
+                    child: Text(
+                      'Tiếng Việt',
+                      style: TextStyle(
+                        color:
+                            _language == 'vi' ? Colors.blue[800] : Colors.black,
+                        fontWeight:
+                            _language == 'vi'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -247,7 +375,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 15),
                   Text(
-                    'Hệ Thống Y Tế',
+                    labels['appTitle']!,
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
@@ -256,10 +384,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
+
+                  // 9. TextField cho Phone / Email
                   TextField(
                     controller: _phoneEmailController,
                     decoration: InputDecoration(
-                      hintText: _useEmailLogin ? 'Email' : 'Số điện thoại',
+                      hintText:
+                          _useEmailLogin
+                              ? labels['hintEmail']!
+                              : labels['hintPhone']!,
                       prefixIcon: Icon(
                         _useEmailLogin ? Icons.email : Icons.phone,
                         color: Colors.blue[800],
@@ -284,6 +417,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             : TextInputType.phone,
                   ),
                   const SizedBox(height: 10),
+
+                  // 10. TextButton để chuyển đổi nhập phone / email
                   TextButton(
                     onPressed: () {
                       setState(() {
@@ -292,8 +427,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                     child: Text(
                       _useEmailLogin
-                          ? 'Đăng nhập bằng số điện thoại'
-                          : 'Đăng nhập bằng email',
+                          ? labels['loginByEmail']!
+                          : labels['loginByPhone']!,
                       style: TextStyle(
                         color: Colors.blue[800],
                         fontWeight: FontWeight.w600,
@@ -301,6 +436,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
+
+                  // 11. Nút Login
                   _isLoading
                       ? CircularProgressIndicator(color: Colors.blue[800])
                       : ElevatedButton(
@@ -313,9 +450,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           elevation: 3,
                         ),
-                        child: const Text(
-                          'Đăng Nhập',
-                          style: TextStyle(
+                        child: Text(
+                          labels['btnLogin']!,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -324,10 +461,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                   const SizedBox(height: 20),
+
+                  // 12. Link “Chưa có tài khoản? Đăng ký ngay”
                   TextButton(
                     onPressed: _navigateToSignUp,
                     child: Text(
-                      'Chưa có tài khoản? Đăng ký ngay',
+                      labels['noAccount']!,
                       style: TextStyle(
                         color: Colors.blue[800],
                         decoration: TextDecoration.underline,
@@ -335,6 +474,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
+
+                  // 13. Link “Dùng thử không cần đăng nhập”
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
@@ -355,7 +496,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                     child: Text(
-                      'Dùng thử không cần đăng nhập',
+                      labels['tryGuest']!,
                       style: TextStyle(
                         color: Colors.green[700],
                         decoration: TextDecoration.underline,
