@@ -21,6 +21,7 @@ Future<Map<String, dynamic>?> predictHeartDisease(
   // Sử dụng địa chỉ IP của máy bạn khi chạy backend
   final url = Uri.parse("http://192.168.1.111:5000/predict");
 
+
   try {
     // In ra dữ liệu đầu vào để kiểm tra
     print('Input Data: $inputData');
