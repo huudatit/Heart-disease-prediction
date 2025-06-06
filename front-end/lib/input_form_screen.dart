@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:dacn_app/main.dart';
 import 'package:dacn_app/result_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class InputFormScreen extends StatefulWidget {
-  const InputFormScreen({Key? key}) : super(key: key);
+  final String language; // thêm tham số language
+
+  const InputFormScreen({Key? key, required this.language}) : super(key: key);
 
   @override
   State<InputFormScreen> createState() => _InputFormScreenState();
@@ -30,6 +33,86 @@ class _InputFormScreenState extends State<InputFormScreen>
   late AnimationController _animationController;
   bool _isLoading = false;
 
+  // 2. Map chứa nhãn theo cả hai ngôn ngữ
+  final Map<String, Map<String, String>> _labels = {
+    'en': {
+      'title': 'Cardiac Health Assessment',
+      'instruction':
+          'Enter accurate information for the best prediction results',
+      'submitLoading': 'Processing...',
+      'submitButton': 'Predict Risk',
+      'fillAll': 'Please fill in all fields',
+      // Các nhãn form field
+      'age': 'Age',
+      'sex': 'Sex',
+      'cp': 'Chest Pain Type',
+      'trestbps': 'Resting BP (mmHg)',
+      'chol': 'Cholesterol (mg/dL)',
+      'fbs': 'Fasting Blood Sugar',
+      'restecg': 'Rest ECG',
+      'thalach': 'Max Heart Rate',
+      'exang': 'Exercise Angina',
+      'oldpeak': 'ST Depression',
+      'slope': 'ST Slope',
+      'ca': 'Major Vessels',
+      'thal': 'Thalassemia',
+    },
+    'vi': {
+      'title': 'Đánh giá sức khỏe tim mạch',
+      'instruction': 'Nhập thông tin chính xác để có kết quả đánh giá tốt nhất',
+      'submitLoading': 'Đang xử lý...',
+      'submitButton': 'Dự đoán nguy cơ',
+      'fillAll': 'Vui lòng điền đầy đủ thông tin',
+      // Các nhãn form field
+      'age': 'Tuổi',
+      'sex': 'Giới tính',
+      'cp': 'Loại đau ngực',
+      'trestbps': 'Huyết áp nghỉ (mmHg)',
+      'chol': 'Cholesterol (mg/dL)',
+      'fbs': 'Đường huyết lúc đói',
+      'restecg': 'Điện tâm đồ nghỉ',
+      'thalach': 'Nhịp tim tối đa (bpm)',
+      'exang': 'Đau khi vận động',
+      'oldpeak': 'Độ suy giảm ST',
+      'slope': 'Độ dốc ST',
+      'ca': 'Số lượng mạch chính',
+      'thal': 'Thalassemia',
+    },
+  };
+
+  final Map<String, Map<String, String>> _hints = {
+    'en': {
+      'age': 'Enter age (18-100)',
+      'sex': '0 or 1',
+      'cp': '0–3',
+      'trestbps': 'e.g., 130',
+      'chol': 'e.g., 250',
+      'fbs': '0 or 1',
+      'restecg': '0–2',
+      'thalach': 'e.g., 180',
+      'exang': '0 or 1',
+      'oldpeak': 'e.g., 3.5',
+      'slope': '0–2',
+      'ca': '0–3',
+      'thal': '1–3',
+    },
+    'vi': {
+      'age': 'Nhập tuổi (18-100)',
+      'sex': '0 hoặc 1',
+      'cp': 'Từ 0 đến 3',
+      'trestbps': 'Ví dụ: 130',
+      'chol': 'Ví dụ: 250',
+      'fbs': '0 hoặc 1',
+      'restecg': 'Từ 0 đến 2',
+      'thalach': 'Ví dụ: 180',
+      'exang': '0 hoặc 1',
+      'oldpeak': 'Ví dụ: 3.5',
+      'slope': 'Từ 0 đến 2',
+      'ca': 'Từ 0 đến 3',
+      'thal': 'Từ 1 đến 3',
+    },
+  };
+
   @override
   void initState() {
     super.initState();
@@ -48,12 +131,14 @@ class _InputFormScreenState extends State<InputFormScreen>
   }
 
   void _submit() async {
+    final labels = _labels[widget.language]!;
+    // Kiểm tra xem đã điền đầy đủ chưa
     bool isValid = controllers.values.every(
       (controller) => controller.text.isNotEmpty,
     );
 
     if (!isValid) {
-      _showCustomSnackBar('Vui lòng điền đầy đủ thông tin', isError: true);
+      _showCustomSnackBar(labels['fillAll']!, isError: true);
       return;
     }
 
@@ -61,6 +146,7 @@ class _InputFormScreenState extends State<InputFormScreen>
       _isLoading = true;
     });
 
+    // Chuẩn hóa dữ liệu đầu vào
     final inputData = controllers.map((key, controller) {
       dynamic value;
       switch (key) {
@@ -88,6 +174,13 @@ class _InputFormScreenState extends State<InputFormScreen>
     });
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      for (var entry in inputData.entries) {
+        prefs.setString(entry.key, entry.value.toString());
+      }
+      prefs.setString('last_updated', DateTime.now().toIso8601String());
+
+      // predictHeartDisease sẽ gọi lên server Flask, trả về Map {'prediction':..., 'probability':...}
       final result = await predictHeartDisease(inputData);
 
       setState(() {
@@ -103,6 +196,7 @@ class _InputFormScreenState extends State<InputFormScreen>
                   prediction: result['prediction'],
                   probability: result['probability'],
                   inputData: inputData,
+                  language: widget.language,
                 ),
             transitionsBuilder: (
               context,
@@ -124,7 +218,9 @@ class _InputFormScreenState extends State<InputFormScreen>
         );
       } else {
         _showCustomSnackBar(
-          'Không thể dự đoán. Vui lòng thử lại.',
+          widget.language == 'en'
+              ? 'Cannot predict. Please try again.'
+              : 'Không thể dự đoán. Vui lòng thử lại.',
           isError: true,
         );
       }
@@ -132,7 +228,12 @@ class _InputFormScreenState extends State<InputFormScreen>
       setState(() {
         _isLoading = false;
       });
-      _showCustomSnackBar('Đã xảy ra lỗi. Vui lòng thử lại.', isError: true);
+      _showCustomSnackBar(
+        widget.language == 'en'
+            ? 'An error occurred. Please try again.'
+            : 'Đã xảy ra lỗi. Vui lòng thử lại.',
+        isError: true,
+      );
     }
   }
 
@@ -173,6 +274,9 @@ class _InputFormScreenState extends State<InputFormScreen>
   }
 
   Widget _buildInputCard(String key, int index) {
+    final labels = _labels[widget.language]!;
+    final hints = _hints[widget.language]!;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -192,22 +296,27 @@ class _InputFormScreenState extends State<InputFormScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Tiêu đề field
             Text(
-              _getLocalizedLabel(key),
+              labels[key] ?? key,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey[800],
               ),
             ),
+            const SizedBox(height: 4),
+            // Thông tin mô tả (nếu có)
             if (_getFieldDescription(key).isNotEmpty) ...[
-              const SizedBox(height: 4),
               Text(
                 _getFieldDescription(key),
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
-            ],
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ] else
+              const SizedBox(height: 12),
+
+            // TextField
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
@@ -224,7 +333,7 @@ class _InputFormScreenState extends State<InputFormScreen>
                   fontWeight: FontWeight.w500,
                 ),
                 decoration: InputDecoration(
-                  hintText: _getLocalizedHint(key),
+                  hintText: hints[key] ?? '',
                   hintStyle: TextStyle(
                     color: Colors.grey[400],
                     fontWeight: FontWeight.w400,
@@ -253,7 +362,7 @@ class _InputFormScreenState extends State<InputFormScreen>
   }
 
   String _getFieldDescription(String key) {
-    final descriptions = {
+    final descriptionsVi = {
       'sex': '0: Nữ, 1: Nam',
       'cp': '0-3: Mức độ đau ngực',
       'fbs': '0: ≤120, 1: >120 mg/dL',
@@ -263,17 +372,34 @@ class _InputFormScreenState extends State<InputFormScreen>
       'ca': '0-3: Số mạch máu chính',
       'thal': '1-3: Loại Thalassemia',
     };
-    return descriptions[key] ?? '';
+    final descriptionsEn = {
+      'sex': '0: Female, 1: Male',
+      'cp': '0–3: Chest pain type',
+      'fbs': '0: ≤120, 1: >120 mg/dL',
+      'restecg': '0–2: Resting ECG results',
+      'exang': '0: No, 1: Yes',
+      'slope': '0–2: ST slope',
+      'ca': '0–3: Number of major vessels',
+      'thal': '1–3: Thalassemia type',
+    };
+    return widget.language == 'vi'
+        ? (descriptionsVi[key] ?? '')
+        : (descriptionsEn[key] ?? '');
   }
 
   @override
   Widget build(BuildContext context) {
+    final labels = _labels[widget.language]!;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'Đánh giá sức khỏe tim mạch',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        title: Text(
+          labels['title']!,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: Colors.blue[600],
         elevation: 0,
@@ -284,7 +410,6 @@ class _InputFormScreenState extends State<InputFormScreen>
       ),
       body: Column(
         children: [
-          // Header info
           Container(
             width: double.infinity,
             color: Colors.blue[600],
@@ -299,9 +424,9 @@ class _InputFormScreenState extends State<InputFormScreen>
                   width: 1,
                 ),
               ),
-              child: const Text(
-                'Nhập thông tin chính xác để có kết quả đánh giá tốt nhất',
-                style: TextStyle(
+              child: Text(
+                labels['instruction']!,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -310,7 +435,6 @@ class _InputFormScreenState extends State<InputFormScreen>
               ),
             ),
           ),
-          // Form
           Expanded(
             child: FadeTransition(
               opacity: _animationController,
@@ -324,7 +448,7 @@ class _InputFormScreenState extends State<InputFormScreen>
                         .entries
                         .map((entry) => _buildInputCard(entry.value, entry.key))
                         .toList(),
-                    const SizedBox(height: 80), // Space for FAB
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -344,10 +468,10 @@ class _InputFormScreenState extends State<InputFormScreen>
           ),
           label:
               _isLoading
-                  ? const Row(
+                  ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(
+                      const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
@@ -357,10 +481,10 @@ class _InputFormScreenState extends State<InputFormScreen>
                           ),
                         ),
                       ),
-                      SizedBox(width: 12),
+                      const SizedBox(width: 12),
                       Text(
-                        'Đang xử lý...',
-                        style: TextStyle(
+                        labels['submitLoading']!,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -368,9 +492,9 @@ class _InputFormScreenState extends State<InputFormScreen>
                       ),
                     ],
                   )
-                  : const Text(
-                    'Dự đoán nguy cơ',
-                    style: TextStyle(
+                  : Text(
+                    labels['submitButton']!,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -380,43 +504,5 @@ class _InputFormScreenState extends State<InputFormScreen>
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
-  }
-
-  String _getLocalizedLabel(String key) {
-    final labels = {
-      'age': 'Tuổi',
-      'sex': 'Giới tính',
-      'cp': 'Loại đau ngực',
-      'trestbps': 'Huyết áp nghỉ (mmHg)',
-      'chol': 'Cholesterol (mg/dL)',
-      'fbs': 'Đường huyết lúc đói',
-      'restecg': 'Điện tâm đồ nghỉ',
-      'thalach': 'Nhịp tim tối đa (bpm)',
-      'exang': 'Đau khi vận động',
-      'oldpeak': 'Độ suy giảm ST',
-      'slope': 'Độ dốc ST',
-      'ca': 'Số lượng mạch chính',
-      'thal': 'Thalassemia',
-    };
-    return labels[key] ?? key;
-  }
-
-  String _getLocalizedHint(String key) {
-    final hints = {
-      'age': 'Nhập tuổi (18-100)',
-      'sex': '0 hoặc 1',
-      'cp': 'Từ 0 đến 3',
-      'trestbps': 'Ví dụ: 130',
-      'chol': 'Ví dụ: 250',
-      'fbs': '0 hoặc 1',
-      'restecg': 'Từ 0 đến 2',
-      'thalach': 'Ví dụ: 180',
-      'exang': '0 hoặc 1',
-      'oldpeak': 'Ví dụ: 3.5',
-      'slope': 'Từ 0 đến 2',
-      'ca': 'Từ 0 đến 3',
-      'thal': 'Từ 1 đến 3',
-    };
-    return hints[key] ?? 'Nhập giá trị';
   }
 }

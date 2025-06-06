@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart';
+import 'admin_dashboard.dart';
 import 'home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -45,65 +46,99 @@ class _SplashScreenState extends State<SplashScreen>
     final prefs = await SharedPreferences.getInstance();
     final savedPhone = prefs.getString('phone');
 
-    print('SavedPhone from SharedPreferences: $savedPhone'); // Debug line
+    print('SavedPhone from SharedPreferences: $savedPhone'); // Debug
 
     if (savedPhone != null) {
       try {
-        print('Querying Firestore for phone: $savedPhone'); // Debug line
+        print('Querying Firestore for phone: $savedPhone'); // Debug
 
-        // Lấy thông tin người dùng từ Firestore
         final QuerySnapshot userSnapshot =
             await FirebaseFirestore.instance
                 .collection('users')
                 .where('phone', isEqualTo: savedPhone)
                 .get();
 
-        print(
-          'Query returned ${userSnapshot.docs.length} documents',
-        ); // Debug line
+        print('Query returned ${userSnapshot.docs.length} documents'); // Debug
 
         if (userSnapshot.docs.isNotEmpty) {
-          final userData =
-              userSnapshot.docs.first.data() as Map<String, dynamic>;
+          final raw = userSnapshot.docs.first.data();
+          final Map<String, dynamic> userData =
+              raw is Map<String, dynamic> ? raw : <String, dynamic>{};
 
-          print('Found user data: ${userData['name']}'); // Debug line
+          print(
+            'Found user data: ${userData['name']}, role=${userData['role']}',
+          ); // Debug
 
-          // Chuyển đến màn hình Home nếu tìm thấy người dùng
+          final String roleFromFirestore =
+              (userData['role'] as String?) ?? 'user';
+
           if (mounted) {
-            Navigator.of(context).pushReplacement(
-              PageRouteBuilder(
-                pageBuilder:
-                    (context, animation, secondaryAnimation) =>
-                        HomeScreen(userData: userData),
-                transitionsBuilder: (
-                  context,
-                  animation,
-                  secondaryAnimation,
-                  child,
-                ) {
-                  const begin = Offset(1.0, 0.0);
-                  const end = Offset.zero;
-                  const curve = Curves.easeInOutQuart;
-                  var tween = Tween(
-                    begin: begin,
-                    end: end,
-                  ).chain(CurveTween(curve: curve));
-                  return SlideTransition(
-                    position: animation.drive(tween),
-                    child: child,
-                  );
-                },
-                transitionDuration: const Duration(milliseconds: 500),
-              ),
-            );
-            return;
+            if (roleFromFirestore == 'admin') {
+              // Nếu là admin → vào AdminDashboard
+              print('Navigating to AdminDashboard');
+              Navigator.of(context).pushReplacement(
+                PageRouteBuilder(
+                  pageBuilder:
+                      (context, animation, secondaryAnimation) =>
+                          const AdminDashboard(),
+                  transitionsBuilder: (
+                    context,
+                    animation,
+                    secondaryAnimation,
+                    child,
+                  ) {
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOutQuart;
+                    var tween = Tween(
+                      begin: begin,
+                      end: end,
+                    ).chain(CurveTween(curve: curve));
+                    return SlideTransition(
+                      position: animation.drive(tween),
+                      child: child,
+                    );
+                  },
+                  transitionDuration: const Duration(milliseconds: 500),
+                ),
+              );
+            } else {
+              // Nếu là user bình thường → vào HomeScreen
+              print('Navigating to HomeScreen as user');
+              Navigator.of(context).pushReplacement(
+                PageRouteBuilder(
+                  pageBuilder:
+                      (context, animation, secondaryAnimation) =>
+                          HomeScreen(userData: userData),
+                  transitionsBuilder: (
+                    context,
+                    animation,
+                    secondaryAnimation,
+                    child,
+                  ) {
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOutQuart;
+                    var tween = Tween(
+                      begin: begin,
+                      end: end,
+                    ).chain(CurveTween(curve: curve));
+                    return SlideTransition(
+                      position: animation.drive(tween),
+                      child: child,
+                    );
+                  },
+                  transitionDuration: const Duration(milliseconds: 500),
+                ),
+              );
+            }
           }
+          return; // Đã điều hướng xong, bỏ qua phần xuống login
         } else {
-          print('No user found with phone: $savedPhone'); // Debug line
+          print('No user found with phone: $savedPhone'); // Debug
         }
       } catch (e) {
         print('Error checking login status: $e');
-        // Consider showing error on UI
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -111,10 +146,10 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
     } else {
-      print('No saved phone found in SharedPreferences'); // Debug line
+      print('No saved phone found in SharedPreferences'); // Debug
     }
 
-    // Nếu không có thông tin đăng nhập hoặc lỗi, chuyển đến màn hình đăng nhập
+    // Nếu chưa có login hoặc không tìm thấy user, chuyển về LoginScreen
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
@@ -138,6 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
