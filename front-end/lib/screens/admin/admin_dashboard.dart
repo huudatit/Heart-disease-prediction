@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:dacn_app/screens/common/splash_screen.dart';
 import 'user_detail_screen.dart';
-import 'login_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -103,7 +105,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
           (route) => false,
         );
       }
