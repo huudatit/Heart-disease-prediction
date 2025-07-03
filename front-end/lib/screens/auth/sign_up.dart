@@ -4,8 +4,8 @@ import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dacn_app/models/user_model.dart';
-import 'package:dacn_app/screens/common/home_screen.dart';
-import 'package:dacn_app/widgets/app_theme.dart';
+import 'package:dacn_app/screens/home/home_router.dart';
+import 'package:dacn_app/config/theme_config.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);

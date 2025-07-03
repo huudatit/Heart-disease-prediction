@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dacn_app/models/user_model.dart';
-import 'package:dacn_app/widgets/app_theme.dart';
+import 'package:dacn_app/config/theme_config.dart';
 
 /// Màn hình quản lý user cho Admin
 class UserManagementScreen extends StatefulWidget {
