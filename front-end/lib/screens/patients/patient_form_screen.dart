@@ -6,7 +6,7 @@ import 'package:dacn_app/config/theme_config.dart';
 /// Màn hình tạo mới bệnh nhân lần đầu tiên đến khám
 class PatientFormScreen extends StatefulWidget {
   final String language;
-  const PatientFormScreen({Key? key, this.language = 'en'}) : super(key: key);
+  const PatientFormScreen({super.key, this.language = 'en'});
 
   @override
   State createState() => _PatientFormScreenState();
@@ -64,11 +64,14 @@ class _PatientFormScreenState extends State<PatientFormScreen> {
           .add(data);
       final msg =
           _vi ? 'Thêm bệnh nhân thành công!' : 'Patient added successfully!';
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppColors.success),
       );
+      // ignore: use_build_context_synchronously
       Navigator.pop(context, doc.id);
     } catch (e) {
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_vi ? 'Lỗi lưu bệnh nhân' : 'Failed to save patient'),

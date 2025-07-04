@@ -113,8 +113,8 @@ class AppSizes {
 
   // Icon
   static const double iconSmall = 20.0;
-  static const double iconMedium = 24.0;
-  static const double iconLarge = 32.0;
+  static const double iconMedium = 30.0;
+  static const double iconLarge = 40.0;
 }
 
 /// Kiểu button

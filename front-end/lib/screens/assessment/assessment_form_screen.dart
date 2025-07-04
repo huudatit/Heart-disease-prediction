@@ -190,84 +190,65 @@ class _AssessmentFormState extends State<AssessmentFormScreen>
 
   Widget _buildPatientDropdown() {
     final labels = _labels[widget.language]!;
-    return FutureBuilder<List<QueryDocumentSnapshot>>(
-      future: _fetchPatients(),
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance
+              .collection('patients')
+              .orderBy('fullName')
+              .snapshots(),
       builder: (ctx, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Center(child: CircularProgressIndicator()),
-          );
+        if (snap.hasError) {
+          return Text('Error: ${snap.error}');
         }
-        final docs = snap.data ?? [];
-        if (docs.isEmpty) {
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snap.data!.docs;
+        // Dropdown + Add button luôn hiển thị
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton.icon(
+              style: AppButtonStyles.secondary,
+              icon: const Icon(Icons.person_add),
+              label: Text(
+                widget.language == 'vi' ? 'Thêm bệnh nhân' : 'Add Patient',
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => PatientFormScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: AppSizes.marginMedium),
+            DropdownButtonFormField<String>(
+              value: _selectedPatientId,
+              decoration: InputDecoration(
+                labelText: labels['patient'],
+                hintText: labels['patient'],
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.person, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.language == 'vi'
-                          ? 'Chưa có bệnh nhân nào'
-                          : 'No patients available',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
               ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                style: AppButtonStyles.primary,
-                onPressed: () {
-                  // Điều hướng tới màn tạo bệnh nhân mới
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => PatientFormScreen()),
-                  );
-                },
-                child: Text(
-                  widget.language == 'vi' ? 'Thêm bệnh nhân' : 'Add Patient',
-                  style: AppTextStyles.button,
-                ),
-              ),
-            ],
-          );
-        }
-        return DropdownButtonFormField<String>(
-          value: _selectedPatientId,
-          decoration: InputDecoration(
-            labelText: labels['patient'],
-            hintText: labels['patient'],
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.grey),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.blue),
-            ),
-          ),
-          items:
-              docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return DropdownMenuItem(
-                  value: doc.id,
-                  child: Text(data['fullName'] ?? ''),
-                );
-              }).toList(),
-          onChanged: (v) => setState(() => _selectedPatientId = v),
+              items:
+                  docs.map((doc) {
+                    final data = doc.data();
+                    return DropdownMenuItem(
+                      value: doc.id,
+                      child: Text(data['fullName'] ?? ''),
+                    );
+                  }).toList(),
+              onChanged: (v) => setState(() => _selectedPatientId = v),
+            ),           
+          ],
         );
       },
     );
   }
+
 
   Widget _buildField(String key) {
     final labels = _labels[widget.language]!;
@@ -371,21 +352,10 @@ class _AssessmentFormState extends State<AssessmentFormScreen>
                 color: AppColors.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                  child: Text(
-                    labels['instruction']!,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: AppColors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                ),             
               ),
-              const SizedBox(height: AppSizes.marginLarge),
               _buildPatientDropdown(),
-              const SizedBox(height: AppSizes.marginMedium),
+              const SizedBox(height: AppSizes.marginLarge),
               // Hiển thị form input dù có hay không có bệnh nhân
               Expanded(
                 child: SingleChildScrollView(
@@ -398,18 +368,20 @@ class _AssessmentFormState extends State<AssessmentFormScreen>
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSizes.paddingMedium),
-        child: ElevatedButton(
-          style: AppButtonStyles.primary,
-          onPressed: _isLoading ? null : _submitForm,
-          child: Text(
-            _isLoading ? labels['loading']! : labels['submit']!,
-            style: AppTextStyles.button,
+      
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSizes.paddingMedium),
+          child: ElevatedButton(
+            style: AppButtonStyles.primary,
+            onPressed: _isLoading ? null : _submitForm,
+            child: Text(
+              _isLoading ? labels['loading']! : labels['submit']!,
+              style: AppTextStyles.button,
+            ),
           ),
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

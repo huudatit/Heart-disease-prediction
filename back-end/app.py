@@ -1,66 +1,88 @@
+# app.py
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import joblib
 import pandas as pd
-import os
-import sys
+from pathlib import Path
+from datetime import datetime
 
-# In ra đường dẫn hiện tại để kiểm tra
-print("Current working directory:", os.getcwd())
-print("Script directory:", os.path.dirname(os.path.abspath(__file__)))
+# 1) Khởi tạo Flask và CORS
+app = Flask(__name__)
+CORS(app)
 
-# Thử nhiều đường dẫn khác nhau
-possible_paths = [
-    os.path.join(os.path.dirname(__file__), 'random_forest_model.pkl'),
-    os.path.join(os.path.dirname(__file__), 'ml_model', 'random_forest_model.pkl'),
-    os.path.join(os.getcwd(), 'random_forest_model.pkl'),
-    os.path.join(os.getcwd(), 'ml_model', 'random_forest_model.pkl'),
-    os.path.join(os.path.dirname(sys.executable), 'random_forest_model.pkl')
+# 2) Xác định đường dẫn đến model và scaler
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / 'ml_model' / 'random_forest_model.pkl'
+
+# 3) Load model & scaler
+try:
+    model = joblib.load(MODEL_PATH)
+    print(f"✅ Loaded model from {MODEL_PATH}")
+except Exception as e:
+    model = None
+    print(f"❌ Failed to load model: {e}")
+
+# 4) Định nghĩa thứ tự feature (phải khớp với lúc train)
+FEATURE_ORDER = [
+    'age','sex','cp','trestbps','chol',
+    'fbs','restecg','thalach','exang',
+    'oldpeak','slope','ca','thal'
 ]
 
-# Thử load model từ các đường dẫn khác nhau
-model = None
-for path in possible_paths:
-    try:
-        print(f"Trying to load model from: {path}")
-        model = joblib.load(path)
-        print(f"Model successfully loaded from {path}")
-        break
-    except FileNotFoundError:
-        print(f"Model not found at {path}")
-    except Exception as e:
-        print(f"Error loading model from {path}: {e}")
+def get_risk_level(p):
+    if p >= 0.85:   return 'High'
+    if p >= 0.4:   return 'Medium'
+    return 'Low'
 
-if model is None:
-    print("Could not load the model from any of the specified paths")
+def get_recommendations(pred, prob, data):
+    recs = []
+    if pred == 1:
+        recs += [
+            "Tham khảo bác sĩ tim mạch",
+            "Làm thêm ECG, siêu âm tim"
+        ]
+    if data['age'] > 50:
+        recs.append("Theo dõi tim mạch do tuổi cao")
+    if data['trestbps'] > 140:
+        recs.append("Kiểm soát huyết áp: giảm muối, tập thể dục")
+    if data['chol'] > 240:
+        recs.append("Kiểm soát cholesterol: ăn ít béo, vận động")
+    if not recs:
+        recs += ["Duy trì lối sống lành mạnh", "Khám định kỳ"]
+    return recs
 
-# Tạo Flask app
-app = Flask(__name__)
-
-# Endpoint API dự đoán
 @app.route('/predict', methods=['POST'])
 def predict():
     if model is None:
-        return jsonify({'error': 'Model not loaded. Check file path and permissions.'}), 500
-    
-    try:
-        # Nhận dữ liệu JSON từ Flutter
-        input_data = request.get_json()
+        return jsonify({'error': 'Model chưa load được'}), 500
 
-        # Convert thành DataFrame
-        input_df = pd.DataFrame([input_data])
+    payload = request.get_json(force=True)
+    # Check đủ 13 trường
+    for f in FEATURE_ORDER:
+        if f not in payload:
+            return jsonify({'error': f'Missing field: {f}'}), 400
 
-        # Dự đoán
-        prediction = model.predict(input_df)[0]
-        probability = model.predict_proba(input_df)[0][1]
+    # Xây DataFrame theo đúng thứ tự
+    row = [payload[f] for f in FEATURE_ORDER]
+    df = pd.DataFrame([row], columns=FEATURE_ORDER)
 
-        # Trả kết quả
-        return jsonify({
-            'prediction': int(prediction),
-            'probability': float(probability)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    # Scale nếu có scaler
+    X = df.values
 
-# Chạy server
+    # Dự đoán
+    pred = int(model.predict(X)[0])
+    prob = float(model.predict_proba(X)[0][1])
+
+    result = {
+        'prediction': pred,
+        'probability': prob,
+        'risk_level': get_risk_level(prob),
+        'timestamp': datetime.now().isoformat(),
+        'recommendations': get_recommendations(pred, prob, payload)
+    }
+    return jsonify(result), 200
+
+# Các endpoint khác (patient, history…) giữ nguyên nếu cần
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

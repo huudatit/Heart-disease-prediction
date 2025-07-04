@@ -18,7 +18,6 @@ class HomeRouter {
         return DoctorHomeScreen(user: user, language: language);
 
       case UserRole.nurse:
-      default:
         return NurseHomeScreen(user: user, language: language);
     }
   }

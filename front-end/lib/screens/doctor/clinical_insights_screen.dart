@@ -4,7 +4,8 @@ import 'package:dacn_app/config/theme_config.dart';
 
 /// Màn Thông Tin Lâm Sàng dành cho Bác sĩ
 class ClinicalInsightsScreen extends StatefulWidget {
-  const ClinicalInsightsScreen({Key? key}) : super(key: key);
+  final String language;
+  const ClinicalInsightsScreen({super.key, required this.language});
 
   @override
   State<ClinicalInsightsScreen> createState() => _ClinicalInsightsScreenState();
@@ -66,10 +67,15 @@ class _ClinicalInsightsScreenState extends State<ClinicalInsightsScreen>
         backgroundColor: AppColors.primary,
         title: Text('Thông Tin Lâm Sàng', style: AppTextStyles.appBar),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.white,
           labelColor: AppColors.white,
+          // ignore: deprecated_member_use
           unselectedLabelColor: AppColors.white.withOpacity(0.7),
           labelStyle: AppTextStyles.bodyMedium, // cài kiểu chữ chung
           unselectedLabelStyle:
@@ -134,50 +140,95 @@ class _ClinicalInsightsScreenState extends State<ClinicalInsightsScreen>
     );
   }
 
-  Widget _buildRecommendationsTab() {
+   Widget _buildRecommendationsTab() {
+    final tvi = widget.language == 'vi';
     return Padding(
       padding: const EdgeInsets.all(AppSizes.paddingMedium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Chọn mức nguy cơ:', style: AppTextStyles.bodyMedium),
-          const SizedBox(height: AppSizes.paddingSmall),
-          DropdownButton<String>(
-            value: _selectedRisk,
-            isExpanded: true,
-            items:
-                _riskLevels
-                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                    .toList(),
-            onChanged: (v) => setState(() => _selectedRisk = v!),
+          Text(
+            tvi ? 'Chọn mức nguy cơ:' : 'Select risk level:',
+            style: AppTextStyles.h3,
           ),
-          const SizedBox(height: AppSizes.marginMedium),
-          Expanded(
-            child: ListView(
-              children:
-                  _recommendations[_selectedRisk]!
-                      .map(
-                        (tip) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('• ', style: TextStyle(fontSize: 18)),
-                              Expanded(
-                                child: Text(
-                                  tip,
-                                  style: AppTextStyles.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
+          const SizedBox(height: AppSizes.paddingSmall),
+
+          // 1) Bọc Dropdown trong Theme widget
+          Theme(
+            data: Theme.of(context).copyWith(
+              dropdownMenuTheme: DropdownMenuThemeData(
+                // 'menuStyle' là nơi cấu hình backgroundColor + shape
+                menuStyle: MenuStyle(
+                  // nền trắng cho popup
+                  backgroundColor: WidgetStateProperty.all(AppColors.white),
+                  // bo góc cho popup
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppSizes.radiusMedium,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            child: DropdownButtonFormField<String>(
+              value: _selectedRisk,
+              isExpanded: true,
+              dropdownColor: AppColors.white, // phòng ngừa
+              decoration: InputDecoration(
+                labelText: tvi ? 'Mức nguy cơ' : 'Risk Level',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                ),
+              ),
+              items:
+                  _riskLevels
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                       .toList(),
+              onChanged: (v) => setState(() => _selectedRisk = v!),
+            ),
+          ),
+
+          const SizedBox(height: AppSizes.marginMedium),
+
+          Expanded(
+            child: ListView.separated(
+              separatorBuilder:
+                  (_, _) => const SizedBox(height: AppSizes.marginSmall),
+              itemCount: _recommendations[_selectedRisk]!.length,
+              itemBuilder: (_, i) {
+                final tip = _recommendations[_selectedRisk]![i];
+                return Card(
+                  color: AppColors.cardBackground,
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSizes.paddingMedium),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: AppColors.success,
+                          size: AppSizes.iconSmall,
+                        ),
+                        const SizedBox(width: AppSizes.paddingSmall),
+                        Expanded(
+                          child: Text(tip, style: AppTextStyles.bodyMedium),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+
 }

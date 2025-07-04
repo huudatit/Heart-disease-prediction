@@ -1,6 +1,8 @@
 // lib/screens/home/nurse_home_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:dacn_app/config/theme_config.dart';
 import 'package:dacn_app/models/user_model.dart';
 
@@ -8,19 +10,43 @@ import 'package:dacn_app/screens/auth/login_screen.dart';
 import 'package:dacn_app/screens/assessment/assessment_form_screen.dart';
 import 'package:dacn_app/screens/nurse/assessment_queue_screen.dart';
 import 'package:dacn_app/screens/nurse/patient_monitoring_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Trang chủ dành cho Y tá
-class NurseHomeScreen extends StatelessWidget {
+class NurseHomeScreen extends StatefulWidget {
   final UserModel user;
-  final String language;
+  final String initialLanguage;
 
-  const NurseHomeScreen({Key? key, required this.user, this.language = 'en'})
-    : super(key: key);
+  const NurseHomeScreen({
+    super.key,
+    required this.user,
+    this.initialLanguage = 'en', required String language,
+  });
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _NurseHomeScreenState createState() => _NurseHomeScreenState();
+}
+
+class _NurseHomeScreenState extends State<NurseHomeScreen> {
+  late String _language;
+
+  @override
+  void initState() {
+    super.initState();
+    _language = widget.initialLanguage;
+  }
+
+  void _onLanguageSelected(String lang) {
+    if (lang == _language) return;
+    setState(() {
+      _language = lang;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tvi = language == 'vi';
+    final tvi = _language == 'vi';
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primary,
@@ -30,6 +56,35 @@ class NurseHomeScreen extends StatelessWidget {
         ),
         centerTitle: true,
         actions: [
+          // nút chọn ngôn ngữ
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.language, color: AppColors.white),
+            tooltip: tvi ? 'Chọn ngôn ngữ' : 'Select Language',
+            onSelected: _onLanguageSelected,
+            itemBuilder:
+                (_) => [
+                  PopupMenuItem(
+                    value: 'en',
+                    child: Text(
+                      'English',
+                      style: TextStyle(
+                        color: _language == 'en' ? AppColors.primary : null,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'vi',
+                    child: Text(
+                      'Tiếng Việt',
+                      style: TextStyle(
+                        color: _language == 'vi' ? AppColors.primary : null,
+                      ),
+                    ),
+                  ),
+                ],
+          ),
+
+          // nút logout
           IconButton(
             icon: const Icon(Icons.logout, color: AppColors.white),
             onPressed: () async {
@@ -37,6 +92,7 @@ class NurseHomeScreen extends StatelessWidget {
               await prefs.remove('staffId');
               await prefs.remove('role');
               Navigator.pushAndRemoveUntil(
+                // ignore: use_build_context_synchronously
                 context,
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
@@ -45,16 +101,21 @@ class NurseHomeScreen extends StatelessWidget {
           ),
         ],
       ),
+
       body: Padding(
         padding: const EdgeInsets.all(AppSizes.paddingMedium),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              tvi ? 'Xin chào, ${user.fullName}' : 'Welcome, ${user.fullName}',
+              tvi
+                  ? 'Xin chào, ${widget.user.fullName}'
+                  : 'Welcome, ${widget.user.fullName}',
               style: AppTextStyles.h2,
             ),
             const SizedBox(height: AppSizes.marginLarge),
+
+            // phóng rộng để grid scroll nếu cần
             Expanded(
               child: GridView.count(
                 crossAxisCount: 2,
@@ -66,44 +127,47 @@ class NurseHomeScreen extends StatelessWidget {
                     icon: Icons.add_chart,
                     label: tvi ? 'Đánh giá mới' : 'New Assessment',
                     color: AppColors.primary,
-                    onTap:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => AssessmentFormScreen(
-                                  language: language,
-                                  userRole: user.role,
-                                ),
-                          ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => AssessmentFormScreen(
+                                language: _language,
+                                userRole: widget.user.role,
+                              ),
                         ),
+                      );
+                    },
                   ),
                   _buildCard(
                     icon: Icons.queue,
                     label: tvi ? 'Hàng đợi đánh giá' : 'Assessment Queue',
                     color: AppColors.warning,
-                    onTap:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => AssessmentQueueScreen(language: language),
-                          ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => AssessmentQueueScreen(language: _language),
                         ),
+                      );
+                    },
                   ),
                   _buildCard(
                     icon: Icons.monitor_heart,
                     label: tvi ? 'Giám sát BN' : 'Patient Monitoring',
                     color: AppColors.info,
-                    onTap:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) =>
-                                    PatientMonitoringScreen(language: language),
-                          ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) =>
+                                  PatientMonitoringScreen(language: _language),
                         ),
+                      );
+                    },
                   ),
                   _buildCard(
                     icon: Icons.bar_chart,
@@ -114,6 +178,7 @@ class NurseHomeScreen extends StatelessWidget {
                           SnackBar(
                             content: Text(
                               tvi ? 'Đang phát triển' : 'Coming soon',
+                              style: AppTextStyles.bodyMedium,
                             ),
                           ),
                         ),
@@ -143,6 +208,7 @@ class NurseHomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
           boxShadow: [
             BoxShadow(
+              // ignore: deprecated_member_use
               color: Colors.black.withOpacity(0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
