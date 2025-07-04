@@ -1,7 +1,7 @@
 import 'package:dacn_app/services/firebase/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/common/splash_screen.dart';
+import 'screens/auth/splash_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'services/api/api_config.dart';

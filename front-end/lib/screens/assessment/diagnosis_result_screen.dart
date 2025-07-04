@@ -1,29 +1,36 @@
-// lib/screens/doctor/diagnosis_result_screen.dart
+// /lib/screens/assessment/diagnosis_result_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dacn_app/screens/common/splash_screen.dart';
-import 'package:dacn_app/screens/user/input_form_screen.dart';
+
+import 'package:dacn_app/screens/assessment/risk_recommendations.dart';
+import 'package:dacn_app/screens/assessment/assessment_form_screen.dart';
 import 'package:dacn_app/models/user_model.dart';
-import 'package:dacn_app/widgets/app_theme.dart';
+import 'package:dacn_app/config/theme_config.dart';
 
 class DiagnosisResultScreen extends StatefulWidget {
+  final String patientId;
   final int prediction;
   final double probability;
   final Map<String, dynamic> inputData;
   final String language;
   final UserRole userRole;
+  final bool isSaved;
 
   const DiagnosisResultScreen({
-    Key? key,
+    super.key,
+    required this.patientId,
     required this.prediction,
     required this.probability,
     required this.inputData,
     required this.language,
     required this.userRole,
-  }) : super(key: key);
+    this.isSaved = true,
+  });
 
   @override
+  // ignore: library_private_types_in_public_api
   _DiagnosisResultScreenState createState() => _DiagnosisResultScreenState();
 }
 
@@ -35,8 +42,9 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if ((widget.userRole == UserRole.doctor ||
-              widget.userRole == UserRole.nurse) &&
+      if ((widget.isSaved &&
+              (widget.userRole == UserRole.doctor ||
+                  widget.userRole == UserRole.nurse)) &&
           !_isSaved) {
         _saveHealthRecord();
       }
@@ -48,15 +56,12 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('phone');
     final email = prefs.getString('email');
-    if (phone == null && email == null) {
-      setState(() => _isSaving = false);
-      _showLoginError();
-      return;
-    }
+    final prob = widget.probability;
+    final riskLevel = prob < 0.5 ? 'low' : (prob < 0.85 ? 'medium' : 'high');
+
     try {
-      // query user doc
-      final col = FirebaseFirestore.instance.collection('users');
-      QuerySnapshot snap =
+      final col = FirebaseFirestore.instance.collection('patients');
+      final snap =
           phone != null
               ? await col.where('phone', isEqualTo: phone).limit(1).get()
               : await col.where('email', isEqualTo: email).limit(1).get();
@@ -66,12 +71,16 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'prediction': widget.prediction,
         'probability': widget.probability,
-        'risk_level': widget.prediction == 1 ? 'high' : 'low',
+        'risk_level': riskLevel,
         'risk_description':
             widget.language == 'vi'
                 ? (widget.prediction == 1 ? 'Nguy cơ cao' : 'Nguy cơ thấp')
                 : (widget.prediction == 1 ? 'High risk' : 'Low risk'),
-        'input_data': widget.inputData,
+        'input_data': {
+          'fullName': widget.inputData['fullName'] ?? '—',
+          'phone': phone ?? '—',
+          ...widget.inputData,
+        },
       };
       await col.doc(uid).collection('health_records').add(record);
       await prefs.setBool('need_to_sync', true);
@@ -79,6 +88,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
         _isSaved = true;
         _isSaving = false;
       });
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -90,6 +100,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
       );
     } catch (e) {
       setState(() => _isSaving = false);
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -102,35 +113,28 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
     }
   }
 
-  void _showLoginError() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.language == 'vi'
-              ? 'Đăng nhập để lưu kết quả'
-              : 'Please login to save',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
-        backgroundColor: AppColors.error,
-      ),
-    );
-    Future.delayed(const Duration(seconds: 1), () {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const SplashScreen()),
-        (route) => false,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isHigh = widget.prediction == 1;
+    // 1. Tính riskLevel dựa trên xác suất
+    final prob = widget.probability;
+    final riskLevel = prob < 0.50 ? 'low' : (prob < 0.85 ? 'medium' : 'high');
+
+    // 2. Tạo các biến phụ trợ
+    final isHigh = riskLevel == 'high';
+    final isMedium = riskLevel == 'medium';
+    //final isLow = riskLevel == 'low';
     final tvi = widget.language == 'vi';
-    final title =
-        tvi
-            ? (isHigh ? 'Nguy cơ cao' : 'Nguy cơ thấp')
-            : (isHigh ? 'High Risk' : 'Low Risk');
+
+    // 3. Tiêu đề hiển thị (3 mức)
+    String title;
+    if (riskLevel == 'high') {
+      title = tvi ? 'Nguy cơ cao' : 'High Risk';
+    } else if (riskLevel == 'medium') {
+      title = tvi ? 'Nguy cơ trung bình' : 'Medium Risk';
+    } else {
+      title = tvi ? 'Nguy cơ thấp' : 'Low Risk';
+    }
+
     final probLabel = tvi ? 'Xác suất' : 'Probability';
     final saveText =
         _isSaved
@@ -141,54 +145,55 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: Text(
-          tvi ? 'Kết quả đánh giá' : 'Result',
-          style: AppTextStyles.appBarTitle,
-        ),
+        title: Text(title, style: AppTextStyles.appBar),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.all(12),
+            Padding(
+              padding: const EdgeInsets.all(AppSizes.paddingSmall),
               child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: AppColors.white,
+                width: AppSizes.iconMedium,
+                height: AppSizes.iconMedium,
+                child: const CircularProgressIndicator(
                   strokeWidth: 2,
+                  color: AppColors.white,
                 ),
               ),
             )
           else if (_isSaved)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: Icon(Icons.cloud_done, color: AppColors.white),
+            Padding(
+              padding: const EdgeInsets.all(AppSizes.paddingSmall),
+              child: const Icon(Icons.cloud_done, color: AppColors.white),
             ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+        padding: const EdgeInsets.all(AppSizes.paddingMedium),
         child: Column(
           children: [
-            // Risk Card
+            // 4. Card hiển thị mức độ
             Card(
               color: AppColors.cardBackground,
               elevation: 2,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
                 child: Column(
                   children: [
                     Row(
                       children: [
                         Icon(
                           isHigh ? Icons.warning : Icons.check_circle,
-                          size: AppDimensions.iconXLarge,
+                          size: AppSizes.iconLarge,
                           color: isHigh ? AppColors.error : AppColors.success,
                         ),
-                        const SizedBox(width: AppDimensions.paddingSmall),
+                        const SizedBox(width: AppSizes.paddingSmall),
                         Expanded(
                           child: Text(
                             title,
@@ -200,23 +205,23 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppDimensions.marginSmall),
+                    const SizedBox(height: AppSizes.marginSmall),
                     Text(
-                      '$probLabel: \${(widget.probability*100).toStringAsFixed(2)}%',
+                      '$probLabel: ${(prob * 100).toStringAsFixed(2)}%',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: AppColors.primary,
                       ),
                     ),
-                    const SizedBox(height: AppDimensions.marginSmall),
+                    const SizedBox(height: AppSizes.marginSmall),
                     Row(
                       children: [
                         Icon(
                           _isSaved ? Icons.cloud_done : Icons.cloud_queue,
+                          size: AppSizes.iconSmall,
                           color:
                               _isSaved ? AppColors.success : AppColors.textHint,
-                          size: 16,
                         ),
-                        const SizedBox(width: AppDimensions.paddingXSmall),
+                        const SizedBox(width: AppSizes.paddingSmall),
                         Text(saveText, style: AppTextStyles.bodySmall),
                       ],
                     ),
@@ -224,30 +229,32 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: AppDimensions.marginLarge),
-            // Input Details Card
+
+            const SizedBox(height: AppSizes.marginLarge),
+
+            // 5. Card chi tiết đầu vào (giữ nguyên)
             Card(
               color: AppColors.cardBackground,
               elevation: 2,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+                padding: const EdgeInsets.all(AppSizes.paddingMedium),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       tvi ? 'Chi tiết đầu vào' : 'Input Details',
-                      style: AppTextStyles.h4.copyWith(
+                      style: AppTextStyles.h3.copyWith(
                         color: AppColors.primary,
                       ),
                     ),
-                    const SizedBox(height: AppDimensions.paddingSmall),
+                    const SizedBox(height: AppSizes.paddingSmall),
                     ...widget.inputData.entries.map((e) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppDimensions.paddingXSmall,
+                          vertical: AppSizes.paddingSmall,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -263,38 +270,42 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: AppDimensions.marginLarge),
-            // Recommended Actions
-            if (isHigh)
+
+            const SizedBox(height: AppSizes.marginLarge),
+
+            // 6. Recommended Actions: bạn có thể hiện cả với mức medium nếu muốn
+            if (isHigh || isMedium)
               Card(
                 color: AppColors.cardBackground,
                 elevation: 2,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    AppDimensions.radiusMedium,
-                  ),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         tvi ? 'Giải pháp khuyến nghị' : 'Recommended Actions',
-                        style: AppTextStyles.h4.copyWith(
+                        style: AppTextStyles.h3.copyWith(
                           color: AppColors.primary,
                         ),
                       ),
-                      const SizedBox(height: AppDimensions.paddingSmall),
-                      ..._recommendations(tvi).map(
+                      const SizedBox(height: AppSizes.paddingSmall),
+                      // I wanna use recommendations of assessment/risk_recommendations.dart
+                      ...RiskRecommendations.getRecommendations(
+                        riskLevel,
+                        widget.language,
+                      ).map(
                         (sol) => Padding(
                           padding: const EdgeInsets.symmetric(
-                            vertical: AppDimensions.paddingXSmall,
+                            vertical: AppSizes.paddingSmall,
                           ),
                           child: Row(
                             children: [
@@ -302,7 +313,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                                 Icons.check_circle,
                                 color: AppColors.success,
                               ),
-                              const SizedBox(width: AppDimensions.paddingSmall),
+                              const SizedBox(width: AppSizes.paddingSmall),
                               Expanded(
                                 child: Text(
                                   sol,
@@ -317,8 +328,10 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: AppDimensions.marginLarge),
-            // Buttons
+
+            const SizedBox(height: AppSizes.marginLarge),
+
+            // 7. Nút Save / Re-predict (giữ nguyên)
             Row(
               children: [
                 if (!_isSaved &&
@@ -340,35 +353,33 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
                               : const Icon(Icons.save),
                       label: Text(
                         tvi ? 'Lưu kết quả' : 'Save Result',
-                        style: AppTextStyles.buttonLarge,
+                        style: AppTextStyles.button,
                       ),
-                      style: AppButtons.primaryButtonStyle.copyWith(
-                        backgroundColor: MaterialStateProperty.all(
-                          AppColors.success,
-                        ),
-                      ),
+                      style: AppButtonStyles.primary,
                     ),
                   ),
                 if (!_isSaved &&
                     (widget.userRole == UserRole.doctor ||
                         widget.userRole == UserRole.nurse))
-                  const SizedBox(width: AppDimensions.paddingMedium),
+                  const SizedBox(width: AppSizes.paddingMedium),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder:
-                              (_) => InputFormScreen(language: widget.language, userRole: widget.userRole,),
+                    onPressed:
+                        () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) => AssessmentFormScreen(
+                                  language: widget.language,
+                                  userRole: widget.userRole,
+                                ),
+                          ),
                         ),
-                      );
-                    },
+                    style: AppButtonStyles.primary,
                     child: Text(
                       tvi ? 'Dự đoán lại' : 'Re-predict',
-                      style: AppTextStyles.buttonLarge,
+                      style: AppTextStyles.button,
                     ),
-                    style: AppButtons.primaryButtonStyle,
                   ),
                 ),
               ],
@@ -377,22 +388,6 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
         ),
       ),
     );
-  }
-
-  List<String> _recommendations(bool tvi) {
-    return tvi
-        ? [
-          'Tập thể dục nhẹ hàng ngày',
-          'Hạn chế muối và chất béo',
-          'Khám định kỳ 3 tháng',
-          'Giữ tâm lý tích cực',
-        ]
-        : [
-          'Light exercise daily',
-          'Limit salt & fats',
-          'Regular check-ups',
-          'Maintain positive mindset',
-        ];
   }
 
   String _label(String key) {
@@ -444,7 +439,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
               'Đau không điển hình',
               'Đau dữ dội',
             ][v]
-            : ['None', 'Typical', 'Atypical', 'Severe'][v];
+            : ['0', '1', '2', '3'][v];
       default:
         return v.toString();
     }

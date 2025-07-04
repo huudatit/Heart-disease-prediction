@@ -1,88 +1,94 @@
 // lib/models/user_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Các quyền user trong hệ thống
-enum UserRole { doctor, nurse, admin, patient }
+/// Vai trò người dùng trong hệ thống
+enum UserRole { doctor, nurse, admin }
 
-/// Model chung cho cả staff và bệnh nhân
+/// Model đơn giản cho User
 class UserModel {
-  /// Firebase document ID
+  /// UID của Firebase
   final String uid;
 
-  /// Họ tên đầy đủ hoặc display name
-  final String fullname;
+  /// Họ và tên đầy đủ
+  final String fullName;
 
-  /// Email (chỉ dùng với user patient hoặc nếu staff có email)
+  /// Email đăng nhập
   final String email;
 
-  /// Số điện thoại (chỉ dùng với patient)
-  final String phone;
+  /// Số điện thoại (tuỳ chọn)
+  final String? phone;
 
-  /// staffId, chỉ có staff mới có
+  /// Mã nhân viên (doctor/nurse/admin)
   final String? staffId;
 
-  /// Role của user: doctor/nurse/admin/patient
+  /// Vai trò của user
   final UserRole role;
 
-  /// Department (chỉ có staff)
-  final String? department;
+  /// Ngày tạo tài khoản
+  final DateTime createdAt;
 
   UserModel({
     required this.uid,
-    required this.fullname,
+    required this.fullName,
     required this.email,
-    required this.phone,
+    this.phone,
     this.staffId,
     required this.role,
-    this.department,
+    required this.createdAt,
   });
 
-  /// Tạo từ Firestore DocumentSnapshot
+  /// Tạo từ DocumentSnapshot của Firestore
   factory UserModel.fromDoc(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-    final roleStr = (data['role'] as String?)?.toLowerCase() ?? 'patient';
+    final roleStr = (data['role'] as String?) ?? 'doctor';
     final role = UserRole.values.firstWhere(
-      (r) => r.toString().split('.').last == roleStr,
-      orElse: () => UserRole.patient,
+      (e) => e.toString().split('.').last == roleStr,
+      orElse: () => UserRole.doctor,
     );
+    final timestamp = data['createdAt'];
+    DateTime createdAt = DateTime.now();
+    if (timestamp is Timestamp) {
+      createdAt = timestamp.toDate();
+    }
     return UserModel(
       uid: doc.id,
-      fullname: data['fullname'] as String? ?? '',
+      fullName: data['fullName'] as String? ?? '',
       email: data['email'] as String? ?? '',
-      phone: data['phone'] as String? ?? '',
+      phone: data['phone'] as String?,
       staffId: data['staffId'] as String?,
       role: role,
-      department: data['department'] as String?,
+      createdAt: createdAt,
     );
   }
 
-  /// Tạo từ Map (ví dụ khi đã merge với id)
-  factory UserModel.fromMap(Map<String, dynamic> map) {
-    final roleStr = (map['role'] as String?)?.toLowerCase() ?? 'patient';
-    final role = UserRole.values.firstWhere(
-      (r) => r.toString().split('.').last == roleStr,
-      orElse: () => UserRole.patient,
-    );
-    return UserModel(
-      uid: map['id'] as String,
-      fullname: map['fullname'] as String? ?? '',
-      email: map['email'] as String? ?? '',
-      phone: map['phone'] as String? ?? '',
-      staffId: map['staffId'] as String?,
-      role: role,
-      department: map['department'] as String?,
-    );
-  }
-
-  /// Chuyển về Map để lưu lên Firestore
+  /// Chuyển UserModel về Map để lưu lên Firestore
   Map<String, dynamic> toMap() {
     return {
-      'fullname': fullname,
+      'fullName': fullName,
       'email': email,
-      'phone': phone,
+      if (phone != null) 'phone': phone,
       if (staffId != null) 'staffId': staffId,
       'role': role.toString().split('.').last,
-      if (department != null) 'department': department,
+      'createdAt': Timestamp.fromDate(createdAt),
     };
+  }
+
+  /// Tạo bản copy với một số trường thay đổi
+  UserModel copyWith({
+    String? fullName,
+    String? email,
+    String? phone,
+    String? staffId,
+    UserRole? role,
+  }) {
+    return UserModel(
+      uid: uid,
+      fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      staffId: staffId ?? this.staffId,
+      role: role ?? this.role,
+      createdAt: createdAt,
+    );
   }
 }
