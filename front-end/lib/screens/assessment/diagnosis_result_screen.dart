@@ -53,20 +53,11 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
 
   Future<void> _saveHealthRecord() async {
     setState(() => _isSaving = true);
-    final prefs = await SharedPreferences.getInstance();
-    final phone = prefs.getString('phone');
-    final email = prefs.getString('email');
     final prob = widget.probability;
     final riskLevel = prob < 0.5 ? 'low' : (prob < 0.85 ? 'medium' : 'high');
 
     try {
-      final col = FirebaseFirestore.instance.collection('patients');
-      final snap =
-          phone != null
-              ? await col.where('phone', isEqualTo: phone).limit(1).get()
-              : await col.where('email', isEqualTo: email).limit(1).get();
-      if (snap.docs.isEmpty) throw 'User not found';
-      final uid = snap.docs.first.id;
+      final uid = widget.patientId;
       final record = {
         'timestamp': FieldValue.serverTimestamp(),
         'prediction': widget.prediction,
@@ -76,14 +67,18 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
             widget.language == 'vi'
                 ? (widget.prediction == 1 ? 'Nguy cơ cao' : 'Nguy cơ thấp')
                 : (widget.prediction == 1 ? 'High risk' : 'Low risk'),
+        'status': 'pending',
         'input_data': {
           'fullName': widget.inputData['fullName'] ?? '—',
-          'phone': phone ?? '—',
+          'phone': widget.inputData['phone'] ?? '—',
           ...widget.inputData,
         },
       };
-      await col.doc(uid).collection('health_records').add(record);
-      await prefs.setBool('need_to_sync', true);
+      await FirebaseFirestore.instance
+          .collection('patients')
+          .doc(uid)
+          .collection('health_records')
+          .add(record);
       setState(() {
         _isSaved = true;
         _isSaving = false;
@@ -122,7 +117,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
     // 2. Tạo các biến phụ trợ
     final isHigh = riskLevel == 'high';
     final isMedium = riskLevel == 'medium';
-    //final isLow = riskLevel == 'low';
+    final isLow = riskLevel == 'low';
     final tvi = widget.language == 'vi';
 
     // 3. Tiêu đề hiển thị (3 mức)
@@ -276,58 +271,11 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
               ),
             ),
 
-            const SizedBox(height: AppSizes.marginLarge),
+            const SizedBox(height: AppSizes.marginSmall),
 
             // 6. Recommended Actions: bạn có thể hiện cả với mức medium nếu muốn
-            if (isHigh || isMedium)
-              Card(
-                color: AppColors.cardBackground,
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tvi ? 'Giải pháp khuyến nghị' : 'Recommended Actions',
-                        style: AppTextStyles.h3.copyWith(
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: AppSizes.paddingSmall),
-                      // I wanna use recommendations of assessment/risk_recommendations.dart
-                      ...RiskRecommendations.getRecommendations(
-                        riskLevel,
-                        widget.language,
-                      ).map(
-                        (sol) => Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSizes.paddingSmall,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                color: AppColors.success,
-                              ),
-                              const SizedBox(width: AppSizes.paddingSmall),
-                              Expanded(
-                                child: Text(
-                                  sol,
-                                  style: AppTextStyles.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            if (isHigh || isMedium || isLow)
+              RiskRecommendations(riskLevel: riskLevel, language: widget.language),
 
             const SizedBox(height: AppSizes.marginLarge),
 
@@ -391,6 +339,7 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
   }
 
   String _label(String key) {
+    // Nhãn tiếng Việt
     const vi = {
       'age': 'Tuổi',
       'sex': 'Giới tính',
@@ -405,7 +354,11 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
       'slope': 'Dốc ST',
       'ca': 'Mạch chính',
       'thal': 'Thal',
+      // thêm hai khóa mới
+      'fullName': 'Họ và tên',
+      'phone': 'Điện thoại',
     };
+    // Nhãn tiếng Anh
     const en = {
       'age': 'Age',
       'sex': 'Sex',
@@ -420,8 +373,14 @@ class _DiagnosisResultScreenState extends State<DiagnosisResultScreen> {
       'slope': 'ST Slope',
       'ca': 'Vessels',
       'thal': 'Thal',
+      // thêm hai khóa mới
+      'fullName': 'Full Name',
+      'phone': 'Phone',
     };
-    return widget.language == 'vi' ? vi[key]! : en[key]!;
+
+    final map = widget.language == 'vi' ? vi : en;
+    // Nếu không tìm thấy, trả luôn key để không crash
+    return map[key] ?? key;
   }
 
   String _format(String key, dynamic v) {

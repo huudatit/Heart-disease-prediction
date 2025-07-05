@@ -33,6 +33,7 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
           // --- 1. Thanh tìm kiếm ---
@@ -109,6 +110,7 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
                     final phone = data['phone'] as String? ?? '—';
                   
                     return Card(
+                      color: AppColors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
                           AppSizes.radiusMedium,

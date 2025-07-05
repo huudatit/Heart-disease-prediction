@@ -10,10 +10,10 @@ class RiskRecommendations extends StatelessWidget {
   final String language; // 'en' hoặc 'vi'
 
   const RiskRecommendations({
-    Key? key,
+    super.key,
     required this.riskLevel,
     this.language = 'en',
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +24,7 @@ class RiskRecommendations extends StatelessWidget {
     final subtitle = isVi ? _titleVi(riskLevel) : _titleEn(riskLevel);
 
     return Card(
+      color: AppColors.white,
       margin: const EdgeInsets.symmetric(vertical: AppSizes.marginLarge),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
