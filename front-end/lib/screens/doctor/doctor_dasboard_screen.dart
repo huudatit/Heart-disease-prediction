@@ -1,13 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:dacn_app/config/theme_config.dart';
 import 'package:dacn_app/models/user_model.dart';
 import 'package:dacn_app/screens/assessment/assessment_form_screen.dart';
 import 'package:dacn_app/screens/assessment/diagnosis_result_screen.dart';
-import 'package:dacn_app/screens/doctor/clinical_insights_screen.dart';
+//import 'package:dacn_app/screens/doctor/clinical_insights_screen.dart';
 import 'package:dacn_app/screens/doctor/patient_reports_screen.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
@@ -17,14 +16,15 @@ class DoctorDashboardScreen extends StatefulWidget {
   final String language;
 
   const DoctorDashboardScreen({
-    Key? key,
+    super.key,
     required this.userName,
     required this.userId,
     required this.userRole,
     this.language = 'en',
-  }) : super(key: key);
+  });
 
   @override
+  // ignore: library_private_types_in_public_api
   _DoctorDashboardScreenState createState() => _DoctorDashboardScreenState();
 }
 
@@ -76,134 +76,25 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         });
   }
 
-  void _showChangePassword() {
-    final isVI = widget.language == 'vi';
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            backgroundColor: AppColors.white,
-            title: Text(isVI ? 'Đổi mật khẩu' : 'Change Password'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: newCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    hintText: isVI ? 'Mật khẩu mới' : 'New Password',
-                  ),
-                ),
-                const SizedBox(height: AppSizes.paddingSmall),
-                TextField(
-                  controller: confirmCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    hintText: isVI ? 'Xác nhận mật khẩu' : 'Confirm Password',
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(isVI ? 'Hủy' : 'Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (newCtrl.text != confirmCtrl.text) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isVI
-                              ? 'Mật khẩu không khớp'
-                              : 'Passwords do not match',
-                        ),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                    return;
-                  }
-                  try {
-                    await FirebaseAuth.instance.currentUser!.updatePassword(
-                      newCtrl.text,
-                    );
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isVI
-                              ? 'Đổi mật khẩu thành công'
-                              : 'Password changed successfully',
-                        ),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(e.toString()),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                  }
-                },
-                child: Text(isVI ? 'Lưu' : 'Save'),
-              ),
-            ],
-          ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isVI = widget.language == 'vi';
+    final title = isVI ? 'Bảng điều khiển bác sĩ' : 'Doctor Dashboard';
+
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        title: Text(title, style: AppTextStyles.appBar),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(AppSizes.paddingMedium),
         child: ListView(
           children: [
-            // Doctor Info Card
-            Card(
-              color: AppColors.cardBackground,
-              margin: const EdgeInsets.only(bottom: AppSizes.marginLarge),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
-              ),
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSizes.paddingMedium),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.account_circle,
-                      color: AppColors.primary,
-                      size: AppSizes.iconLarge,
-                    ),
-                    const SizedBox(width: AppSizes.paddingMedium),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.userName, style: AppTextStyles.h2),
-                          const SizedBox(height: 4),
-                          Text(
-                            'ID: ${widget.userId}',
-                            style: AppTextStyles.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.lock, color: AppColors.info),
-                      onPressed: _showChangePassword,
-                    ),
-                  ],
-                ),
-              ),
-            ),
             // Grid Actions
             GridView.count(
               shrinkWrap: true,
@@ -244,21 +135,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                         ),
                       ),
                 ),
-                // _buildCard(
-                //   icon: Icons.info_outline,
-                //   label: isVI ? 'Thông tin lâm sàng' : 'Insights',
-                //   color: AppColors.success,
-                //   onTap:
-                //       () => Navigator.push(
-                //         context,
-                //         MaterialPageRoute(
-                //           builder:
-                //               (_) => ClinicalInsightsScreen(
-                //                 language: widget.language,
-                //               ),
-                //         ),
-                //       ),
-                // ),
               ],
             ),
             const SizedBox(height: AppSizes.marginLarge),
@@ -389,6 +265,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
           boxShadow: [
             BoxShadow(
+              // ignore: deprecated_member_use
               color: Colors.black.withOpacity(0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),

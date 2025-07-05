@@ -1,4 +1,5 @@
 // lib/screens/common/splash_screen.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -34,7 +35,6 @@ class _SplashScreenState extends State<SplashScreen>
       'vietnamese': 'Tiếng Việt',
     },
   };
-
   @override
   void initState() {
     super.initState();

@@ -35,6 +35,7 @@ class PatientHistoryScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
+      backgroundColor: AppColors.background,
       body: StreamBuilder<QuerySnapshot>(
         stream:
             FirebaseFirestore.instance
@@ -75,6 +76,7 @@ class PatientHistoryScreen extends StatelessWidget {
               final isHigh = level == 'high';
 
               return Card(
+                color: AppColors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppSizes.radiusMedium),
                 ),

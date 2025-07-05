@@ -1,10 +1,11 @@
-import 'package:dacn_app/services/firebase/firebase_options.dart';
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'screens/auth/splash_screen.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'services/api/api_config.dart';
+import 'package:dacn_app/screens/auth/login_screen.dart';
+import 'package:dacn_app/services/firebase/firebase_options.dart';
 
 void main() async {
   // Đảm bảo Firebase được khởi tạo trước khi chạy app
@@ -29,6 +30,9 @@ class MyApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const SplashScreen(),
+      routes: {
+        '/login': (_) => const LoginScreen(),
+      },
     );
   }
 }

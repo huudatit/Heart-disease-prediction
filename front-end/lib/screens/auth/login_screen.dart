@@ -1,4 +1,5 @@
 // lib/screens/auth/login_screen.dart
+import 'package:dacn_app/screens/home/home_router.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -86,12 +87,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateToHome(UserModel user) {
-    Navigator.pushAndRemoveUntil(
+    // Navigator.pushAndRemoveUntil(
+    //   context,
+    //   MaterialPageRoute(builder: (_) => const SplashScreen()),
+    //   (route) => false,
+    // );
+   HomeRouter.toRole(
       context,
-      MaterialPageRoute(builder: (_) => const SplashScreen()),
-      (route) => false,
+      user: user,
+      language: _language,
     );
-    // TODO: replace SplashScreen with appropriate home router
   }
 
   Future<void> _handleLogin() async {
